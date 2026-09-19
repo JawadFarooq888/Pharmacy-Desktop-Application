@@ -1,0 +1,24 @@
+# Runtime data (auto-created; never committed)
+data/
+backups/
+invoices/
+labels/
+
+# Build artifacts
+build/
+dist/
+installer_output/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Claude Code project metadata
+.claude/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+*.log

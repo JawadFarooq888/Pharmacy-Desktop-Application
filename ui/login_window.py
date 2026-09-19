@@ -1,0 +1,92 @@
+"""Login screen. On success, opens the MainWindow with the authenticated user."""
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
+
+from logic import auth
+
+
+class LoginWindow(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Pharmacy Management System - Login")
+        self.setFixedSize(380, 320)
+        self.main_window = None
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout()
+        layout.setContentsMargins(40, 30, 40, 30)
+        layout.setSpacing(14)
+
+        title = QLabel("Pharmacy Management System")
+        title.setProperty("heading", True)
+        title.setAlignment(Qt.AlignCenter)
+        title.setWordWrap(True)
+        layout.addWidget(title)
+
+        subtitle = QLabel("Sign in to continue")
+        subtitle.setProperty("subheading", True)
+        subtitle.setAlignment(Qt.AlignCenter)
+        layout.addWidget(subtitle)
+
+        self.username_input = QLineEdit()
+        self.username_input.setPlaceholderText("Username")
+        layout.addWidget(self.username_input)
+
+        self.password_input = QLineEdit()
+        self.password_input.setPlaceholderText("Password")
+        self.password_input.setEchoMode(QLineEdit.Password)
+        self.password_input.returnPressed.connect(self._attempt_login)
+        layout.addWidget(self.password_input)
+
+        self.error_label = QLabel("")
+        self.error_label.setProperty("warning", True)
+        self.error_label.setAlignment(Qt.AlignCenter)
+        self.error_label.setWordWrap(True)
+        layout.addWidget(self.error_label)
+
+        login_btn = QPushButton("🔐  Login")
+        login_btn.setProperty("success", True)
+        login_btn.clicked.connect(self._attempt_login)
+        layout.addWidget(login_btn)
+
+        hint = QLabel("Default admin login: admin / admin123")
+        hint.setProperty("subheading", True)
+        hint.setAlignment(Qt.AlignCenter)
+        layout.addWidget(hint)
+
+        self.setLayout(layout)
+        self.username_input.setFocus()
+
+    def _attempt_login(self):
+        username = self.username_input.text().strip()
+        password = self.password_input.text()
+
+        if not username or not password:
+            self.error_label.setText("Please enter both username and password.")
+            return
+
+        user = auth.login(username, password)
+        if user is None:
+            self.error_label.setText("Invalid username or password.")
+            self.password_input.clear()
+            return
+
+        self.error_label.setText("")
+        self._open_main_window(user)
+
+    def _open_main_window(self, user):
+        # Imported here to avoid a circular import (main_window imports feature
+        # views which may, in turn, import back into ui in future modules).
+        from ui.main_window import MainWindow
+
+        self.main_window = MainWindow(user)
+        self.main_window.show()
+        self.close()
