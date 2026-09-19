@@ -1,5 +1,6 @@
 """Supplier management screen: add/edit/delete suppliers + record purchase orders
 (receive new stock into an existing medicine's batch/expiry/quantity)."""
+from PySide6.QtCore import QDate
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -86,6 +87,7 @@ class PurchaseOrderDialog(QDialog):
         self.expiry_input = QDateEdit()
         self.expiry_input.setCalendarPopup(True)
         self.expiry_input.setDisplayFormat("yyyy-MM-dd")
+        self.expiry_input.setDate(QDate.currentDate())
 
         layout.addRow("Medicine *", self.medicine_input)
         layout.addRow("Quantity received *", self.quantity_input)

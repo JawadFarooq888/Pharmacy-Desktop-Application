@@ -12,6 +12,20 @@ billing/POS, customers, suppliers, users, reports, and backup/restore.
 
 No internet connection is required for any feature.
 
+## Screenshots
+
+| Login | Dashboard |
+|---|---|
+| ![Login screen](screenshots/login.png) | ![Dashboard with low-stock and expiry alerts](screenshots/dashboard.png) |
+
+| Inventory | Billing / POS |
+|---|---|
+| ![Inventory management with barcode column and expiry/low-stock highlighting](screenshots/inventory.png) | ![Billing screen with a cart and totals](screenshots/billing.png) |
+
+| Reports | Backup & Restore |
+|---|---|
+| ![Daily sales report](screenshots/reports.png) | ![Backup and restore with history](screenshots/backup_restore.png) |
+
 ## Project structure
 
 ```

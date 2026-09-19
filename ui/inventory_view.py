@@ -5,7 +5,7 @@ edit/delete); admins get full CRUD.
 """
 import os
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -54,7 +54,7 @@ class MedicineEditDialog(QDialog):
         self.expiry_input = QDateEdit()
         self.expiry_input.setCalendarPopup(True)
         self.expiry_input.setDisplayFormat("yyyy-MM-dd")
-        self.expiry_input.setDate(self.expiry_input.date())
+        self.expiry_input.setDate(QDate.currentDate())
 
         self.quantity_input = QSpinBox()
         self.quantity_input.setRange(0, 1_000_000)
@@ -83,7 +83,6 @@ class MedicineEditDialog(QDialog):
             self.barcode_input.setText(self.medicine.barcode)
             self.batch_input.setText(self.medicine.batch_no)
             if self.medicine.expiry_date:
-                from PySide6.QtCore import QDate
                 self.expiry_input.setDate(QDate.fromString(self.medicine.expiry_date, "yyyy-MM-dd"))
             self.quantity_input.setValue(self.medicine.quantity)
             self.purchase_price_input.setValue(self.medicine.purchase_price)

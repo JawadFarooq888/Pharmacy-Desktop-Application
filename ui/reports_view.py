@@ -2,7 +2,7 @@
 each viewable on-screen with Export to PDF / Export to Excel buttons."""
 from datetime import date
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QDate, Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QDateEdit,
@@ -103,7 +103,7 @@ class DailySalesTab(_ReportTab):
         self.date_input = QDateEdit()
         self.date_input.setCalendarPopup(True)
         self.date_input.setDisplayFormat("yyyy-MM-dd")
-        self.date_input.setDate(self.date_input.date())
+        self.date_input.setDate(QDate.currentDate())
         self.controls_layout.addWidget(QLabel("Date:"))
         self.controls_layout.addWidget(self.date_input)
         refresh_btn = QPushButton("🔄  Refresh")
@@ -170,11 +170,11 @@ class ProfitLossTab(_ReportTab):
         self.start_input = QDateEdit()
         self.start_input.setCalendarPopup(True)
         self.start_input.setDisplayFormat("yyyy-MM-dd")
-        self.start_input.setDate(self.start_input.date().addDays(-30))
+        self.start_input.setDate(QDate.currentDate().addDays(-30))
         self.end_input = QDateEdit()
         self.end_input.setCalendarPopup(True)
         self.end_input.setDisplayFormat("yyyy-MM-dd")
-        self.end_input.setDate(self.end_input.date())
+        self.end_input.setDate(QDate.currentDate())
         self.controls_layout.addWidget(QLabel("From:"))
         self.controls_layout.addWidget(self.start_input)
         self.controls_layout.addWidget(QLabel("To:"))
