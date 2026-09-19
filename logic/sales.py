@@ -96,6 +96,10 @@ def checkout(cart: Cart, cashier_id: int, customer_id: int = None) -> dict:
     stock, all inside one transaction. Returns a receipt dict for printing."""
     if not cart.items:
         raise ValueError("Cannot checkout an empty cart.")
+    if cart.discount < 0:
+        raise ValueError("Discount cannot be negative.")
+    if cart.discount > cart.subtotal:
+        raise ValueError("Discount cannot exceed the subtotal.")
 
     conn = get_connection()
     try:

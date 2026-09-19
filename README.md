@@ -22,9 +22,17 @@ No internet connection is required for any feature.
 |---|---|
 | ![Inventory management with barcode column and expiry/low-stock highlighting](screenshots/inventory.png) | ![Billing screen with a cart and totals](screenshots/billing.png) |
 
+| Customers | Suppliers |
+|---|---|
+| ![Customer management](screenshots/customers.png) | ![Supplier management with purchase orders](screenshots/suppliers.png) |
+
 | Reports | Backup & Restore |
 |---|---|
 | ![Daily sales report](screenshots/reports.png) | ![Backup and restore with history](screenshots/backup_restore.png) |
+
+| Settings | Cashier role (restricted view) |
+|---|---|
+| ![Settings and user management](screenshots/settings.png) | ![Cashier sees only billing and read-only inventory/customers/reports](screenshots/cashier_view_inventory_readonly.png) |
 
 ## Project structure
 

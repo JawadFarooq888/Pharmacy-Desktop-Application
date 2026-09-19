@@ -36,7 +36,7 @@ def login(username: str, password: str) -> Optional[User]:
     conn = get_connection()
     try:
         row = conn.execute(
-            "SELECT * FROM users WHERE username = ?", (username.strip(),)
+            "SELECT * FROM users WHERE username = ? COLLATE NOCASE", (username.strip(),)
         ).fetchone()
         if row is None or not row["is_active"]:
             return None
@@ -68,7 +68,7 @@ def create_user(username: str, password: str, full_name: str, role: str) -> User
     conn = get_connection()
     try:
         existing = conn.execute(
-            "SELECT id FROM users WHERE username = ?", (username,)
+            "SELECT id FROM users WHERE username = ? COLLATE NOCASE", (username,)
         ).fetchone()
         if existing:
             raise ValueError(f"Username '{username}' already exists.")

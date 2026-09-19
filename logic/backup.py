@@ -11,12 +11,44 @@ Design notes (this module is the app's top priority per spec):
   usage stays bounded; manual backups are never auto-deleted.
 """
 import shutil
+import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from database.db_manager import BACKUP_DIR, DATA_DIR, DB_PATH, get_connection
+
+# Tables that must be present for a file to be trusted as a real backup of
+# this app's database, rather than some unrelated or corrupted file.
+_REQUIRED_TABLES = {"users", "medicines", "sales", "sale_items", "customers", "suppliers"}
+
+
+def _validate_backup_file(path: Path) -> None:
+    """Raise ValueError if `path` is not a usable backup of this app's DB.
+    Restoring a corrupt/unrelated file would otherwise silently destroy the
+    live database, so this check runs before anything is touched."""
+    try:
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+            if integrity != "ok":
+                raise ValueError(f"Backup file failed an integrity check: {integrity}")
+            tables = {
+                row[0]
+                for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+        finally:
+            conn.close()
+    except sqlite3.DatabaseError as e:
+        raise ValueError(f"This file is not a valid database backup: {e}")
+
+    missing = _REQUIRED_TABLES - tables
+    if missing:
+        raise ValueError(
+            "This file doesn't look like a Pharmacy Management System backup "
+            f"(missing tables: {', '.join(sorted(missing))})."
+        )
 
 AUTO_BACKUP_RETENTION = 15
 
@@ -178,6 +210,8 @@ def restore_backup(backup_file_path: str) -> None:
     src = Path(backup_file_path)
     if not src.exists():
         raise FileNotFoundError("Selected backup file does not exist.")
+
+    _validate_backup_file(src)
 
     # Safety copy of the current DB in case the restore needs to be undone.
     DATA_DIR.mkdir(parents=True, exist_ok=True)

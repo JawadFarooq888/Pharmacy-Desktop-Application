@@ -216,6 +216,11 @@ class BillingView(QWidget):
         self._render_cart()
 
     def _recalculate(self):
+        # Discount can never exceed the subtotal (would otherwise produce a
+        # negative total); cap the spinbox itself so it's not even possible
+        # to type an invalid value.
+        self.discount_input.setMaximum(max(self.cart.subtotal, 0.0))
+
         self.cart.discount = self.discount_input.value()
         self.cart.tax_percent = self.tax_input.value()
         self.totals_label.setText(
@@ -243,6 +248,11 @@ class BillingView(QWidget):
             receipt = sales.checkout(self.cart, cashier_id=self.current_user.id, customer_id=customer_id)
         except ValueError as e:
             QMessageBox.warning(self, "Checkout failed", str(e))
+            return
+        except Exception as e:
+            # Anything unexpected (e.g. a database-level error) should still
+            # surface as a clear message rather than an unhandled crash.
+            QMessageBox.critical(self, "Checkout failed", f"The sale could not be completed:\n{e}")
             return
 
         customer_name = self.customer_input.currentText()

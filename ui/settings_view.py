@@ -23,18 +23,23 @@ class GeneralSettingsTab(QWidget):
 
         self.low_stock_input = QSpinBox()
         self.low_stock_input.setRange(0, 100_000)
+        self.low_stock_input.setMaximumWidth(160)
         self.low_stock_input.setValue(settings.get_low_stock_threshold())
         layout.addRow("Default low-stock threshold (units)", self.low_stock_input)
 
         self.expiry_days_input = QSpinBox()
         self.expiry_days_input.setRange(1, 3650)
+        self.expiry_days_input.setMaximumWidth(160)
         self.expiry_days_input.setValue(settings.get_expiry_alert_days())
         layout.addRow("Expiry alert window (days)", self.expiry_days_input)
 
         save_btn = QPushButton("💾  Save Settings")
         save_btn.setProperty("success", True)
         save_btn.clicked.connect(self._save)
-        layout.addRow(save_btn)
+        save_row = QHBoxLayout()
+        save_row.addWidget(save_btn)
+        save_row.addStretch()
+        layout.addRow(save_row)
 
         note = QLabel(
             "The low-stock threshold applies to newly added medicines by default; "

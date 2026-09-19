@@ -48,7 +48,7 @@ class MedicineEditDialog(QDialog):
         self.generic_input = QLineEdit()
         self.category_input = QLineEdit()
         self.barcode_input = QLineEdit()
-        self.barcode_input.setPlaceholderText("Scan or type barcode (optional)")
+        self.barcode_input.setPlaceholderText("Optional")
         self.batch_input = QLineEdit()
 
         self.expiry_input = QDateEdit()
@@ -165,6 +165,8 @@ class MedicineEditDialog(QDialog):
             self.accept()
         except ValueError as e:
             QMessageBox.warning(self, "Cannot save", str(e))
+        except Exception as e:
+            QMessageBox.critical(self, "Cannot save", f"An unexpected error occurred:\n{e}")
 
     def _generate_barcode(self):
         self.barcode_input.setText(barcode_utils.generate_unique_barcode())

@@ -64,6 +64,8 @@ class SupplierEditDialog(QDialog):
             self.accept()
         except ValueError as e:
             QMessageBox.warning(self, "Cannot save", str(e))
+        except Exception as e:
+            QMessageBox.critical(self, "Cannot save", f"An unexpected error occurred:\n{e}")
 
 
 class PurchaseOrderDialog(QDialog):
@@ -119,6 +121,8 @@ class PurchaseOrderDialog(QDialog):
             self.accept()
         except ValueError as e:
             QMessageBox.warning(self, "Cannot save", str(e))
+        except Exception as e:
+            QMessageBox.critical(self, "Cannot save", f"An unexpected error occurred:\n{e}")
 
 
 class SuppliersView(QWidget):
@@ -146,6 +150,8 @@ class SuppliersView(QWidget):
 
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Name", "Contact", "Address", "Actions"])
+        self.table.setColumnWidth(0, 200)
+        self.table.setColumnWidth(1, 140)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
