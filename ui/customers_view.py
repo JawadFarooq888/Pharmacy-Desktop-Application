@@ -62,11 +62,13 @@ class CustomerHistoryDialog(QDialog):
     def __init__(self, parent, customer: customers.Customer):
         super().__init__(parent)
         self.setWindowTitle(f"Sales History — {customer.name}")
-        self.setMinimumSize(420, 320)
+        self.setMinimumSize(480, 320)
         layout = QVBoxLayout()
 
         table = QTableWidget(0, 3)
         table.setHorizontalHeaderLabels(["Invoice No.", "Date", "Total"])
+        table.setColumnWidth(0, 150)
+        table.setColumnWidth(2, 80)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         table.verticalHeader().setVisible(False)

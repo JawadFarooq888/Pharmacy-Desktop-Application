@@ -30,6 +30,10 @@ class MainWindow(QMainWindow):
         self.user = user
         self.setWindowTitle("Pharmacy Management System")
         self.resize(1200, 750)
+        # Below this, the sidebar and page content start cramming into each
+        # other -- shrink-to-broken isn't a state a non-technical user should
+        # be able to reach by just dragging a window edge.
+        self.setMinimumSize(1100, 650)
 
         self.nav_buttons = []
         self._build_ui()

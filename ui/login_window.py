@@ -16,7 +16,12 @@ class LoginWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Pharmacy Management System - Login")
-        self.setFixedSize(380, 320)
+        # A minimum (not fixed) size: the layout below needs a certain
+        # amount of room for all its rows, but isn't locked to it -- a
+        # fixed size here previously clipped/hid the bottom of the form
+        # every time a new row was added to it.
+        self.setMinimumSize(400, 440)
+        self.resize(400, 440)
         self.main_window = None
         self._build_ui()
 
@@ -64,6 +69,7 @@ class LoginWindow(QWidget):
 
         forgot_btn = QPushButton("Forgot admin password?")
         forgot_btn.setProperty("flat", True)
+        forgot_btn.setStyleSheet("text-align: center;")
         forgot_btn.clicked.connect(self._recover_admin)
         layout.addWidget(forgot_btn)
 

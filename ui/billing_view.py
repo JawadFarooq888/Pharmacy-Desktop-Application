@@ -72,8 +72,11 @@ class BillingView(QWidget):
 
         self.cart_table = QTableWidget(0, 5)
         self.cart_table.setHorizontalHeaderLabels(["Medicine", "Qty", "Unit Price", "Subtotal", ""])
+        self.cart_table.setColumnWidth(1, 60)
+        self.cart_table.setColumnWidth(2, 90)
+        self.cart_table.setColumnWidth(3, 90)
+        self.cart_table.setColumnWidth(4, 110)
         self.cart_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.cart_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
         self.cart_table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.cart_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.cart_table.verticalHeader().setVisible(False)
