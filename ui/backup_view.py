@@ -80,6 +80,13 @@ class BackupView(QWidget):
         self.setLayout(layout)
 
     def refresh(self):
+        self.table.setUpdatesEnabled(False)
+        try:
+            self._refresh_impl()
+        finally:
+            self.table.setUpdatesEnabled(True)
+
+    def _refresh_impl(self):
         records = backup.list_backups()
         self.table.setRowCount(len(records))
         for row, rec in enumerate(records):

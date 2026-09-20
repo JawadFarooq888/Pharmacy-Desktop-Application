@@ -1,5 +1,6 @@
 """Billing / POS business logic: build a cart, compute totals, and commit a sale
 as one atomic transaction (insert sale + sale_items, deduct stock)."""
+import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -116,13 +117,24 @@ def checkout(cart: Cart, cashier_id: int, customer_id: int = None) -> dict:
                     f"Only {row['quantity']} unit(s) of '{row['name']}' available now."
                 )
 
-        invoice_no = _generate_invoice_no(conn)
-        cur = conn.execute(
-            "INSERT INTO sales (invoice_no, customer_id, cashier_id, total_amount, discount, tax) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (invoice_no, customer_id, cashier_id, cart.total, cart.discount, cart.tax_amount),
-        )
-        sale_id = cur.lastrowid
+        # Two checkouts landing in the same instant (e.g. the app open in two
+        # windows at once) could both compute the same next invoice number;
+        # retry with a freshly regenerated one rather than losing the sale.
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            invoice_no = _generate_invoice_no(conn)
+            try:
+                cur = conn.execute(
+                    "INSERT INTO sales (invoice_no, customer_id, cashier_id, total_amount, discount, tax) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (invoice_no, customer_id, cashier_id, cart.total, cart.discount, cart.tax_amount),
+                )
+                sale_id = cur.lastrowid
+                break
+            except sqlite3.IntegrityError:
+                if attempt == max_attempts - 1:
+                    raise
+                continue
 
         for item in cart.items:
             conn.execute(

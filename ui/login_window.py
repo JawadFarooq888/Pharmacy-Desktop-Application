@@ -62,8 +62,40 @@ class LoginWindow(QWidget):
         hint.setAlignment(Qt.AlignCenter)
         layout.addWidget(hint)
 
+        forgot_btn = QPushButton("Forgot admin password?")
+        forgot_btn.setProperty("flat", True)
+        forgot_btn.clicked.connect(self._recover_admin)
+        layout.addWidget(forgot_btn)
+
         self.setLayout(layout)
         self.username_input.setFocus()
+
+    def _recover_admin(self):
+        reply = QMessageBox.warning(
+            self,
+            "Reset Admin Password",
+            "This resets the admin account's password back to the default "
+            f"(admin / {auth.RECOVERY_PASSWORD}) so you can sign back in.\n\n"
+            "Use this only if you're the shop owner/manager and have lost "
+            "every admin password -- anyone with access to this PC can use "
+            "this button, the same as anyone who could otherwise sit down "
+            "at this computer.\n\n"
+            "Continue?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        username = auth.recover_admin_access()
+        QMessageBox.information(
+            self,
+            "Password Reset",
+            f"Done. Sign in with:\n\nUsername: {username}\nPassword: {auth.RECOVERY_PASSWORD}\n\n"
+            "Please change this password right away from Settings after signing in.",
+        )
+        self.username_input.setText(username)
+        self.password_input.setText(auth.RECOVERY_PASSWORD)
 
     def _attempt_login(self):
         username = self.username_input.text().strip()

@@ -127,6 +127,13 @@ class CustomersView(QWidget):
         self.setLayout(layout)
 
     def refresh(self):
+        self.table.setUpdatesEnabled(False)
+        try:
+            self._refresh_impl()
+        finally:
+            self.table.setUpdatesEnabled(True)
+
+    def _refresh_impl(self):
         rows = customers.list_customers(search=self.search_input.text().strip())
         self.table.setRowCount(len(rows))
         for row, c in enumerate(rows):

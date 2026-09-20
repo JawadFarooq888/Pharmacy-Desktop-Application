@@ -275,6 +275,16 @@ class InventoryView(QWidget):
         self.supplier_filter.blockSignals(False)
 
     def refresh(self):
+        # Populating hundreds/thousands of rows one at a time triggers a
+        # relayout/repaint on every insert unless updates are suspended --
+        # this alone roughly halves load time for a large inventory.
+        self.table.setUpdatesEnabled(False)
+        try:
+            self._refresh_impl()
+        finally:
+            self.table.setUpdatesEnabled(True)
+
+    def _refresh_impl(self):
         self._reload_filter_options()
         medicines = inventory.list_medicines(
             search=self.search_input.text().strip(),

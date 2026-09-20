@@ -81,6 +81,18 @@ with a default administrator account:
 **Change this password immediately** after first login (Settings → User
 Management → Edit → set a new password).
 
+If every admin password is later forgotten, click **"Forgot admin
+password?"** on the login screen -- it resets the admin account back to
+`admin` / `admin123` (and reactivates it if it was deactivated) with a
+confirmation prompt first. Since this is a fully offline app there's no
+email/SMS reset path, and without this the shop's data would otherwise be
+permanently locked away (Backup/Restore itself is only reachable *after*
+logging in as an admin).
+
+Only one copy of the app can run at a time (a shortcut double-clicked twice
+by accident shows "Already Running" instead of opening a confusing second
+window on the same data).
+
 ## Roles
 
 - **Admin**: full access to every module, including Inventory add/edit/delete,

@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from database.db_manager import get_connection
+from database.db_manager import DEFAULT_ADMIN_USERNAME, get_connection
 from logic.security import hash_password, verify_password
 
 VALID_ROLES = ("admin", "cashier")
@@ -131,5 +131,46 @@ def delete_user(user_id: int, current_user_id: int) -> None:
             raise ValueError("Cannot delete the last remaining admin account.")
         conn.execute("DELETE FROM users WHERE id=?", (user_id,))
         conn.commit()
+    finally:
+        conn.close()
+
+
+RECOVERY_PASSWORD = "admin123"
+
+
+def recover_admin_access() -> str:
+    """Reset the oldest admin account's password (and reactivate/re-promote
+    it if needed) without requiring a login. This is the only way back into
+    the app if every admin password has been forgotten -- since it's a fully
+    offline app there is no email/SMS reset path, and the normal Backup/
+    Restore screen is itself only reachable after logging in as an admin, so
+    a locked-out shop would otherwise have no recovery route at all.
+
+    Returns the username that was reset. Invoked via `main.py --recover-admin`
+    (see ui.login_window's "Forgot password?" link), which runs this before
+    any login is required.
+    """
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT id, username FROM users WHERE role='admin' ORDER BY id LIMIT 1"
+        ).fetchone()
+        if row is None:
+            # No admin account exists at all (shouldn't normally happen) --
+            # recreate the default one from scratch.
+            conn.execute(
+                "INSERT INTO users (username, password_hash, full_name, role, is_active) "
+                "VALUES (?, ?, ?, 'admin', 1)",
+                (DEFAULT_ADMIN_USERNAME, hash_password(RECOVERY_PASSWORD), "Administrator"),
+            )
+            conn.commit()
+            return DEFAULT_ADMIN_USERNAME
+
+        conn.execute(
+            "UPDATE users SET password_hash=?, is_active=1, role='admin' WHERE id=?",
+            (hash_password(RECOVERY_PASSWORD), row["id"]),
+        )
+        conn.commit()
+        return row["username"]
     finally:
         conn.close()

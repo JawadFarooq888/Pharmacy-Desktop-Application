@@ -126,6 +126,13 @@ class UsersView(QWidget):
         self.setLayout(layout)
 
     def refresh(self):
+        self.table.setUpdatesEnabled(False)
+        try:
+            self._refresh_impl()
+        finally:
+            self.table.setUpdatesEnabled(True)
+
+    def _refresh_impl(self):
         users = auth.list_users()
         self.table.setRowCount(len(users))
         for row, user in enumerate(users):

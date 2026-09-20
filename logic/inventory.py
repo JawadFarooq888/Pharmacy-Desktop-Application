@@ -1,6 +1,7 @@
 """Inventory business logic: CRUD, search/filter, low-stock and expiry alerts."""
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from functools import cached_property
 from typing import Optional
 
 from database.db_manager import get_connection
@@ -27,8 +28,12 @@ class Medicine:
     def is_low_stock(self) -> bool:
         return self.quantity <= self.low_stock_threshold
 
-    @property
+    @cached_property
     def days_to_expiry(self) -> Optional[int]:
+        # Cached because this parses expiry_date with strptime, and with large
+        # inventories this property is read multiple times per medicine while
+        # rendering a single table (row coloring, alert counts, etc.) --
+        # re-parsing every time made large inventories visibly slow to load.
         if not self.expiry_date:
             return None
         try:
