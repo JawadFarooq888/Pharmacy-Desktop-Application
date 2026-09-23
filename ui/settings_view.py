@@ -77,6 +77,75 @@ class GeneralSettingsTab(QWidget):
         QMessageBox.information(self, "Saved", "Settings saved successfully.")
 
 
+class RecoveryPinTab(QWidget):
+    """Lets the shop owner set/change the PIN required by the login screen's
+    'Forgot admin password?' button, so resetting admin access needs more
+    than just physical access to the PC (e.g. a cashier at the till)."""
+
+    def __init__(self):
+        super().__init__()
+        layout = QFormLayout()
+
+        self.status_label = QLabel()
+        self.status_label.setWordWrap(True)
+        layout.addRow(self.status_label)
+
+        self.new_pin_input = QLineEdit()
+        self.new_pin_input.setEchoMode(QLineEdit.Password)
+        self.new_pin_input.setMaximumWidth(220)
+        layout.addRow("New Recovery PIN", self.new_pin_input)
+
+        self.confirm_pin_input = QLineEdit()
+        self.confirm_pin_input.setEchoMode(QLineEdit.Password)
+        self.confirm_pin_input.setMaximumWidth(220)
+        layout.addRow("Confirm PIN", self.confirm_pin_input)
+
+        save_btn = QPushButton("🔑  Set Recovery PIN")
+        save_btn.setProperty("success", True)
+        save_btn.clicked.connect(self._save)
+        save_row = QHBoxLayout()
+        save_row.addWidget(save_btn)
+        save_row.addStretch()
+        layout.addRow(save_row)
+
+        note = QLabel(
+            "This PIN is asked for on the login screen before 'Forgot admin password?' "
+            "will reset anything -- without it, anyone sitting at this PC could reset "
+            "admin access. Keep it somewhere safe; it's separate from your login password. "
+            "If you forget this PIN too, contact the developer for the master recovery PIN."
+        )
+        note.setProperty("subheading", True)
+        note.setWordWrap(True)
+        layout.addRow(note)
+
+        self.setLayout(layout)
+        self._refresh_status()
+
+    def _refresh_status(self):
+        if auth.has_recovery_pin():
+            self.status_label.setText("✅  A Recovery PIN is currently set.")
+        else:
+            self.status_label.setText(
+                "⚠️  No Recovery PIN set yet -- anyone at this PC can currently reset admin access. "
+                "Set one below."
+            )
+
+    def _save(self):
+        pin = self.new_pin_input.text()
+        if pin != self.confirm_pin_input.text():
+            QMessageBox.warning(self, "PIN Mismatch", "The two PINs entered do not match.")
+            return
+        try:
+            auth.set_recovery_pin(pin)
+        except ValueError as e:
+            QMessageBox.warning(self, "Cannot Set PIN", str(e))
+            return
+        self.new_pin_input.clear()
+        self.confirm_pin_input.clear()
+        self._refresh_status()
+        QMessageBox.information(self, "Saved", "Recovery PIN updated successfully.")
+
+
 class AuditLogTab(QWidget):
     """Accountability trail: who deleted/changed what, and when -- for a
     shop with more than one staff member using the till."""
@@ -126,6 +195,7 @@ class SettingsView(QWidget):
 
         tabs = QTabWidget()
         tabs.addTab(GeneralSettingsTab(), "General")
+        tabs.addTab(RecoveryPinTab(), "Recovery PIN")
         tabs.addTab(UsersView(current_user), "User Management")
         tabs.addTab(AuditLogTab(), "Audit Log")
         layout.addWidget(tabs)

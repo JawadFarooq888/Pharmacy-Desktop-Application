@@ -4,6 +4,7 @@ from typing import Optional
 
 from database.db_manager import DEFAULT_ADMIN_USERNAME, get_connection
 from logic.security import hash_password, verify_password
+from logic.settings import get_setting, set_setting
 
 VALID_ROLES = ("admin", "cashier")
 
@@ -136,6 +137,47 @@ def delete_user(user_id: int, current_user_id: int) -> None:
 
 
 RECOVERY_PASSWORD = "admin123"
+
+_RECOVERY_PIN_SETTING_KEY = "recovery_pin_hash"
+
+# Developer-only fallback: if the shop owner sets their own recovery PIN
+# (below) and later forgets that too, this fixed PIN still lets the
+# developer reset admin access over the phone without needing physical/DB
+# access to that shop's PC. Only its PBKDF2 hash is embedded here -- never
+# the plaintext -- so extracting this source (or decompiling the frozen
+# .exe) doesn't directly hand out the PIN. This is a *different* secret
+# from the installer password on purpose: reusing one secret for both would
+# mean a single leak compromises both the install gate and every shop's
+# admin recovery at once.
+_MASTER_PIN_HASH = (
+    "b384feb97209baf1e82067f08a103ebd$"
+    "033fc74a63d6c6296d3ab3f5b974c757107735e2318648e338770fef3bd90103"
+)
+
+
+def has_recovery_pin() -> bool:
+    """Whether the shop owner has set their own recovery PIN yet."""
+    return bool(get_setting(_RECOVERY_PIN_SETTING_KEY, ""))
+
+
+def set_recovery_pin(pin: str) -> None:
+    pin = pin.strip()
+    if len(pin) < 4:
+        raise ValueError("Recovery PIN must be at least 4 characters.")
+    set_setting(_RECOVERY_PIN_SETTING_KEY, hash_password(pin))
+
+
+def verify_recovery_pin(pin: str) -> bool:
+    """Accept either the shop owner's own recovery PIN (if they've set one)
+    or the developer's master PIN -- so the reset button never permanently
+    locks a shop out even if the owner never configured their own PIN."""
+    pin = pin.strip()
+    if not pin:
+        return False
+    owner_hash = get_setting(_RECOVERY_PIN_SETTING_KEY, "")
+    if owner_hash and verify_password(pin, owner_hash):
+        return True
+    return verify_password(pin, _MASTER_PIN_HASH)
 
 
 def recover_admin_access() -> str:

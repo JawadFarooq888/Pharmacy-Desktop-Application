@@ -1,6 +1,7 @@
 """Login screen. On success, opens the MainWindow with the authenticated user."""
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QInputDialog,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -9,7 +10,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from logic import auth
+from logic import audit, auth
 
 
 class LoginWindow(QWidget):
@@ -77,15 +78,25 @@ class LoginWindow(QWidget):
         self.username_input.setFocus()
 
     def _recover_admin(self):
+        pin, ok = QInputDialog.getText(
+            self,
+            "Reset Admin Password",
+            "Enter your Recovery PIN to continue.\n\n"
+            "(Set in Settings by the shop owner. If it's been forgotten too, "
+            "contact the developer for the master recovery PIN.)",
+            QLineEdit.Password,
+        )
+        if not ok:
+            return
+        if not auth.verify_recovery_pin(pin):
+            QMessageBox.warning(self, "Incorrect PIN", "That Recovery PIN is not correct.")
+            return
+
         reply = QMessageBox.warning(
             self,
             "Reset Admin Password",
             "This resets the admin account's password back to the default "
             f"(admin / {auth.RECOVERY_PASSWORD}) so you can sign back in.\n\n"
-            "Use this only if you're the shop owner/manager and have lost "
-            "every admin password -- anyone with access to this PC can use "
-            "this button, the same as anyone who could otherwise sit down "
-            "at this computer.\n\n"
             "Continue?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No,
@@ -94,6 +105,7 @@ class LoginWindow(QWidget):
             return
 
         username = auth.recover_admin_access()
+        audit.log(None, "(recovery)", "admin_password_reset", f"admin account '{username}' reset via Recovery PIN")
         QMessageBox.information(
             self,
             "Password Reset",
