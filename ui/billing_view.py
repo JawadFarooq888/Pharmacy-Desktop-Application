@@ -160,6 +160,14 @@ class BillingView(QWidget):
 
         self._reload_customers()
 
+    def refresh(self):
+        """Called whenever this screen becomes visible (e.g. switching to it
+        from another tab) so a customer/medicine added, edited or deleted
+        elsewhere -- while this screen sat idle in the background -- shows up
+        immediately instead of only after manually pressing 🔄 Refresh."""
+        self._reload_customers()
+        self.refresh_search()
+
     def _reload_customers(self):
         current = self.customer_input.currentData()
         self.customer_input.blockSignals(True)

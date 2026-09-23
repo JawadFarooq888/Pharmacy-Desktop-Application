@@ -80,6 +80,11 @@ class ReturnsView(QWidget):
         self._build_ui()
         self.refresh_search()
 
+    def refresh(self):
+        """Called whenever this screen becomes visible, so a sale made
+        elsewhere while this tab sat idle shows up as returnable immediately."""
+        self.refresh_search()
+
     def _build_ui(self):
         layout = QVBoxLayout()
         title = QLabel("Returns / Refunds")

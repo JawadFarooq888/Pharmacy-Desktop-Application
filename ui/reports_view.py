@@ -362,4 +362,13 @@ class ReportsView(QWidget):
         tabs.addTab(ControlledSubstancesTab(), "Controlled Substances")
         layout.addWidget(tabs)
 
+        self.tabs = tabs
         self.setLayout(layout)
+
+    def refresh(self):
+        """Called whenever this screen becomes visible; refreshes just the
+        currently-open sub-tab (each tab already has its own manual Refresh
+        button for expensive re-queries the user doesn't want to repeat)."""
+        current = self.tabs.currentWidget()
+        if current is not None:
+            current.refresh()

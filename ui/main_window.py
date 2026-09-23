@@ -128,6 +128,15 @@ class MainWindow(QMainWindow):
 
     def _switch_page(self, widget):
         self.stack.setCurrentWidget(widget)
+        # Every page keeps its own state alive in the background (tabs are
+        # never destroyed, just hidden), so without this a customer/medicine
+        # added, edited or deleted on one screen would keep looking
+        # unchanged on every other screen until its own manual Refresh
+        # button was clicked -- easy to mistake for "delete/update doesn't
+        # work" when it actually did, just not visibly yet.
+        refresh = getattr(widget, "refresh", None)
+        if callable(refresh):
+            refresh()
         for btn in self.nav_buttons:
             is_active = self.stack.widget(self.nav_buttons.index(btn)) is widget
             btn.setChecked(is_active)

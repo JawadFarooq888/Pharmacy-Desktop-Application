@@ -200,4 +200,12 @@ class SettingsView(QWidget):
         tabs.addTab(AuditLogTab(), "Audit Log")
         layout.addWidget(tabs)
 
+        self.tabs = tabs
         self.setLayout(layout)
+
+    def refresh(self):
+        """Called whenever this screen becomes visible; refreshes just the
+        currently-open sub-tab."""
+        current = self.tabs.currentWidget()
+        if current is not None and hasattr(current, "refresh"):
+            current.refresh()
