@@ -29,7 +29,7 @@ class MainWindow(QMainWindow):
     def __init__(self, user: auth.User):
         super().__init__()
         self.user = user
-        self.setWindowTitle("Pharmacy Management System")
+        self.setWindowTitle("Shani Pharmacy Management System")
         self.resize(1200, 750)
         # Below this, the sidebar and page content start cramming into each
         # other -- shrink-to-broken isn't a state a non-technical user should

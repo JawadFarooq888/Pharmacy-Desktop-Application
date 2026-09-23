@@ -1,4 +1,4 @@
-; Inno Setup script for Pharmacy Management System.
+; Inno Setup script for Shani Pharmacy Management System.
 ; Builds a single Setup.exe that installs the app, adds a Start Menu entry
 ; (searchable via Windows Search) and an optional Desktop shortcut, and
 ; registers a proper uninstaller in "Add or Remove Programs".
@@ -9,9 +9,9 @@
 ; which is normal for desktop software and typical shop PCs are run as local
 ; admin anyway.
 
-#define MyAppName "Pharmacy Management System"
+#define MyAppName "Shani Pharmacy Management System"
 #define MyAppVersion "1.0"
-#define MyAppPublisher "Pharmacy Management System"
+#define MyAppPublisher "Shani Pharmacy Management System"
 #define MyAppExeName "PharmacyManagementSystem.exe"
 
 ; The real install password is never committed to source control -- it's

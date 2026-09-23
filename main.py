@@ -44,7 +44,7 @@ def main():
         QMessageBox.warning(
             None,
             "Already Running",
-            "Pharmacy Management System is already open.\n\n"
+            "Shani Pharmacy Management System is already open.\n\n"
             "Please use the existing window instead of opening a new one.",
         )
         sys.exit(0)

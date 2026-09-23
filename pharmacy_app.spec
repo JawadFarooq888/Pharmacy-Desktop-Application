@@ -1,4 +1,4 @@
-# PyInstaller spec for the Pharmacy Management System.
+# PyInstaller spec for Shani Pharmacy Management System.
 # Build with:  pyinstaller pharmacy_app.spec
 from PyInstaller.utils.hooks import collect_all
 

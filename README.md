@@ -1,4 +1,4 @@
-# Pharmacy Management System
+# Shani Pharmacy Management System
 
 A fully offline desktop application for managing a medical pharmacy: inventory,
 billing/POS, customers, suppliers, users, reports, and backup/restore.

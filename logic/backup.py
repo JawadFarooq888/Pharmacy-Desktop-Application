@@ -46,7 +46,7 @@ def _validate_backup_file(path: Path) -> None:
     missing = _REQUIRED_TABLES - tables
     if missing:
         raise ValueError(
-            "This file doesn't look like a Pharmacy Management System backup "
+            "This file doesn't look like a Shani Pharmacy Management System backup "
             f"(missing tables: {', '.join(sorted(missing))})."
         )
 

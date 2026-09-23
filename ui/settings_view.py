@@ -72,7 +72,7 @@ class GeneralSettingsTab(QWidget):
     def _save(self):
         settings.set_setting("low_stock_threshold", str(self.low_stock_input.value()))
         settings.set_setting("expiry_alert_days", str(self.expiry_days_input.value()))
-        settings.set_setting("shop_name", self.shop_name_input.text().strip() or "Pharmacy Management System")
+        settings.set_setting("shop_name", self.shop_name_input.text().strip() or "Shani Pharmacy Management System")
         settings.set_setting("receipt_format", self.receipt_format_input.currentData())
         QMessageBox.information(self, "Saved", "Settings saved successfully.")
 

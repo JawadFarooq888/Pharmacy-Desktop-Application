@@ -41,4 +41,4 @@ def get_receipt_format() -> str:
 
 
 def get_shop_name() -> str:
-    return get_setting("shop_name", "Pharmacy Management System")
+    return get_setting("shop_name", "Shani Pharmacy Management System")

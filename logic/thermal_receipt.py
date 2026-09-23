@@ -35,7 +35,7 @@ def generate_thermal_receipt(
     width: str = "58mm",
     customer_name: str = "Walk-in Customer",
     cashier_name: str = "",
-    shop_name: str = "Pharmacy Management System",
+    shop_name: str = "Shani Pharmacy Management System",
 ) -> Path:
     """Build a narrow receipt PDF sized for a thermal printer and return its
     path. `width` is "58mm" or "80mm"."""
