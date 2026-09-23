@@ -86,7 +86,7 @@ class BillingView(QWidget):
         customer_row = QHBoxLayout()
         customer_row.addWidget(QLabel("Customer:"))
         self.customer_input = QComboBox()
-        self.customer_input.currentIndexChanged.connect(self._update_credit_label)
+        self.customer_input.currentIndexChanged.connect(self._on_customer_changed)
         customer_row.addWidget(self.customer_input)
         refresh_cust_btn = QPushButton("🔄  Refresh")
         refresh_cust_btn.clicked.connect(self._reload_customers)
@@ -170,7 +170,7 @@ class BillingView(QWidget):
         idx = self.customer_input.findData(current)
         self.customer_input.setCurrentIndex(idx if idx >= 0 else 0)
         self.customer_input.blockSignals(False)
-        self._update_credit_label()
+        self._on_customer_changed()
 
     def _update_credit_label(self):
         customer_id = self.customer_input.currentData()
@@ -183,12 +183,41 @@ class BillingView(QWidget):
         else:
             self.credit_label.setText("")
 
-    def _on_payment_method_changed(self):
+    def _on_customer_changed(self):
+        self._update_credit_label()
+        # Re-apply the payment method's default now that udhaar may have
+        # just become usable again (a walk-in always forces "paid in full"
+        # below, overriding this back if we've switched TO walk-in) --
+        # otherwise switching from Walk-in to a real customer while "Udhaar"
+        # is already selected would silently leave "Amount Paid" at the
+        # walk-in-forced full total, recording the sale as fully paid
+        # instead of the credit sale the cashier picked "Udhaar" for.
+        self._apply_default_amount_paid()
+        self._enforce_walkin_full_payment()
+
+    def _apply_default_amount_paid(self):
         method = self.payment_method_input.currentData()
         if method == "udhaar":
             self.amount_paid_input.setValue(0.0)
         else:
             self.amount_paid_input.setValue(self.cart.total)
+
+    def _enforce_walkin_full_payment(self):
+        """A walk-in sale can never be on udhaar (checkout() rejects it), so
+        the "amount paid" field is locked to the full total -- and disabled
+        entirely -- whenever no customer is selected. Without this, a
+        cashier could select Walk-in + Udhaar (or just hand-type a lower
+        amount) and see a "will be added to udhaar" preview for a sale
+        that's guaranteed to fail at checkout with no customer to bill it to."""
+        is_walkin = self.customer_input.currentData() is None
+        self.amount_paid_input.setEnabled(not is_walkin)
+        if is_walkin:
+            self.amount_paid_input.setValue(self.cart.total)
+            self._update_totals_label()
+
+    def _on_payment_method_changed(self):
+        self._apply_default_amount_paid()
+        self._enforce_walkin_full_payment()
 
     def refresh_search(self):
         text = self.search_input.text().strip()
@@ -264,6 +293,7 @@ class BillingView(QWidget):
             self.amount_paid_input.setValue(self.cart.total)
             self.amount_paid_input.blockSignals(False)
             self._update_totals_label()
+        self._enforce_walkin_full_payment()
 
     def _remove_from_cart(self, medicine_id: int):
         self.cart.remove(medicine_id)
