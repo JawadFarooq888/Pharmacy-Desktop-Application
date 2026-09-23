@@ -16,7 +16,7 @@ from logic import audit, auth
 class LoginWindow(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Shani Pharmacy Management System - Login")
+        self.setWindowTitle("Shani Pharmacy Management System (SPMS) - Login")
         # A minimum (not fixed) size: the layout below needs a certain
         # amount of room for all its rows, but isn't locked to it -- a
         # fixed size here previously clipped/hid the bottom of the form
@@ -31,7 +31,7 @@ class LoginWindow(QWidget):
         layout.setContentsMargins(40, 30, 40, 30)
         layout.setSpacing(14)
 
-        title = QLabel("Shani Pharmacy Management System")
+        title = QLabel("Shani Pharmacy Management System (SPMS)")
         title.setProperty("heading", True)
         title.setAlignment(Qt.AlignCenter)
         title.setWordWrap(True)

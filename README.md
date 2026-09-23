@@ -1,4 +1,4 @@
-# Shani Pharmacy Management System
+# Shani Pharmacy Management System (SPMS)
 
 A fully offline desktop application for managing a medical pharmacy: inventory,
 billing/POS, customers, suppliers, users, reports, and backup/restore.

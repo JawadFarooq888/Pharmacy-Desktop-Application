@@ -16,7 +16,7 @@ def generate_invoice_pdf(
     receipt: dict,
     customer_name: str = "Walk-in Customer",
     cashier_name: str = "",
-    shop_name: str = "Shani Pharmacy Management System",
+    shop_name: str = "Shani Pharmacy Management System (SPMS)",
 ) -> Path:
     """Build a PDF for the given checkout receipt dict (see logic.sales.checkout)
     and return the path it was written to."""

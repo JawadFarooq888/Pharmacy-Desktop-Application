@@ -1,4 +1,4 @@
--- Shani Pharmacy Management System schema
+-- Shani Pharmacy Management System (SPMS) schema
 -- SQLite. Foreign keys enforced by the connection (PRAGMA foreign_keys = ON).
 
 CREATE TABLE IF NOT EXISTS users (
