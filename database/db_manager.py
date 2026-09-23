@@ -42,17 +42,48 @@ def get_connection() -> sqlite3.Connection:
     return conn
 
 
-def _migrate_add_barcode_column(conn: sqlite3.Connection) -> None:
-    """Add the barcode column (+ index) to medicines for DBs created before
-    barcode scanning existed. CREATE TABLE IF NOT EXISTS in schema.sql is a
-    no-op on an already-existing table, so older installs need this explicit
-    ALTER TABLE to pick up the new column."""
-    columns = [row["name"] for row in conn.execute("PRAGMA table_info(medicines)")]
-    if "barcode" not in columns:
-        conn.execute("ALTER TABLE medicines ADD COLUMN barcode TEXT")
+def _add_column_if_missing(conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+    """ALTER TABLE ... ADD COLUMN if it's not already there. CREATE TABLE IF
+    NOT EXISTS in schema.sql is a no-op on an already-existing table, so
+    every column added to an existing table after its first release needs
+    an explicit migration step like this one for older installs to pick it
+    up without losing their data."""
+    columns = [row["name"] for row in conn.execute(f"PRAGMA table_info({table})")]
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
         conn.commit()
+
+
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    _add_column_if_missing(conn, "medicines", "barcode", "TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_medicines_barcode ON medicines(barcode)")
+
+    _add_column_if_missing(conn, "medicines", "is_controlled_substance", "INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "customers", "credit_balance", "REAL NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "sales", "payment_method", "TEXT NOT NULL DEFAULT 'cash'")
+    _add_column_if_missing(conn, "sales", "amount_paid", "REAL NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "sales", "doctor_name", "TEXT")
+    _add_column_if_missing(conn, "sales", "is_refunded", "INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "sale_items", "returned_qty", "INTEGER NOT NULL DEFAULT 0")
     conn.commit()
+
+    # Older sales predate amount_paid tracking (it defaults to 0). Backfill
+    # them as fully paid in cash exactly once -- this must NOT re-run on
+    # every startup, since a legitimate 100%-credit sale also has
+    # amount_paid=0 by design and would otherwise get silently "paid off"
+    # the next time the app starts.
+    already_backfilled = conn.execute(
+        "SELECT 1 FROM settings WHERE key='amount_paid_backfilled'"
+    ).fetchone()
+    if not already_backfilled:
+        conn.execute(
+            "UPDATE sales SET amount_paid = total_amount, payment_method = 'cash' "
+            "WHERE amount_paid = 0 AND payment_method = 'cash'"
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('amount_paid_backfilled', '1')"
+        )
+        conn.commit()
 
 
 def init_db() -> None:
@@ -66,7 +97,7 @@ def init_db() -> None:
         conn.executescript(schema_sql)
         conn.commit()
 
-        _migrate_add_barcode_column(conn)
+        _run_migrations(conn)
 
         cur = conn.execute("SELECT COUNT(*) AS c FROM users")
         if cur.fetchone()["c"] == 0:

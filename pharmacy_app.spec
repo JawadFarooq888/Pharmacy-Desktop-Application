@@ -4,7 +4,7 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = [("database/schema.sql", "database")]
 binaries = []
-hiddenimports = []
+hiddenimports = ["PySide6.QtCharts"]
 
 for pkg in ("reportlab", "openpyxl", "barcode", "PIL"):
     pkg_datas, pkg_binaries, pkg_hiddenimports = collect_all(pkg)

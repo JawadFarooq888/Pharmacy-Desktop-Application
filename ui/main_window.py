@@ -20,6 +20,7 @@ from ui.customers_view import CustomersView
 from ui.dashboard_view import DashboardView
 from ui.inventory_view import InventoryView
 from ui.reports_view import ReportsView
+from ui.returns_view import ReturnsView
 from ui.settings_view import SettingsView
 from ui.suppliers_view import SuppliersView
 
@@ -67,18 +68,20 @@ class MainWindow(QMainWindow):
 
         pages = [("Dashboard", DashboardView(self.user, navigate_callback=self._navigate_to))]
         pages.append(("Billing", BillingView(self.user)))
+        pages.append(("Returns", ReturnsView(self.user)))
         pages.append(("Inventory", InventoryView(self.user)))
         pages.append(("Customers", CustomersView(self.user)))
         if self.user.is_admin:
             pages.append(("Suppliers", SuppliersView()))
         pages.append(("Reports", ReportsView()))
         if self.user.is_admin:
-            pages.append(("Backup / Restore", BackupView()))
+            pages.append(("Backup / Restore", BackupView(self.user)))
             pages.append(("Settings", SettingsView(self.user)))
 
         nav_icons = {
             "Dashboard": "🏠",
             "Billing": "🧾",
+            "Returns": "↩️",
             "Inventory": "💊",
             "Customers": "👥",
             "Suppliers": "🚚",

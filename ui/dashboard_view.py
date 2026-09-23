@@ -1,10 +1,45 @@
 """Dashboard: welcome banner, low-stock/expiry alerts, today's sales summary,
-and quick-action shortcuts (view inventory, backup now)."""
+a 7-day sales trend chart, and quick-action shortcuts."""
 from datetime import date
 
+from PySide6.QtCharts import QBarCategoryAxis, QBarSeries, QBarSet, QChart, QChartView, QValueAxis
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QMessageBox, QPushButton, QVBoxLayout, QWidget
 
 from logic import auth, backup, inventory, reports, settings
+
+
+def _build_sales_trend_chart(trend: list[dict]) -> QChartView:
+    bar_set = QBarSet("Revenue")
+    bar_set.append([t["total"] for t in trend])
+    bar_set.setColor(QColor("#1565C0"))
+
+    series = QBarSeries()
+    series.append(bar_set)
+
+    chart = QChart()
+    chart.addSeries(series)
+    chart.setTitle("Sales — Last 7 Days")
+    chart.legend().setVisible(False)
+    chart.setBackgroundVisible(False)
+
+    axis_x = QBarCategoryAxis()
+    axis_x.append([t["day"][5:] for t in trend])  # MM-DD, short enough to fit
+    chart.addAxis(axis_x, Qt.AlignBottom)
+    series.attachAxis(axis_x)
+
+    max_total = max((t["total"] for t in trend), default=0)
+    axis_y = QValueAxis()
+    axis_y.setRange(0, max(max_total * 1.2, 10))
+    chart.addAxis(axis_y, Qt.AlignLeft)
+    series.attachAxis(axis_y)
+
+    view = QChartView(chart)
+    view.setRenderHint(QPainter.Antialiasing)
+    view.setMinimumHeight(220)
+    view.setMaximumHeight(260)
+    return view
 
 
 class _AlertCard(QWidget):
@@ -89,6 +124,9 @@ class DashboardView(QWidget):
         )
 
         self.layout_.addLayout(cards_row)
+
+        trend = reports.sales_trend(7)
+        self.layout_.addWidget(_build_sales_trend_chart(trend))
 
         if self.current_user.is_admin:
             backup_row = QHBoxLayout()

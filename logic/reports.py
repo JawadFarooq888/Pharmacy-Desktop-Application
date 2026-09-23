@@ -113,6 +113,119 @@ def profit_loss_summary(start_date: str, end_date: str) -> dict:
         conn.close()
 
 
+def sales_trend(days: int = 7) -> list[dict]:
+    """Total revenue per day for the last `days` days (including days with
+    zero sales), oldest first -- for the Dashboard chart."""
+    start = (date.today() - timedelta(days=days - 1)).isoformat()
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT date(date) AS day, SUM(total_amount) AS total FROM sales "
+            "WHERE date(date) >= ? GROUP BY date(date)",
+            (start,),
+        ).fetchall()
+        by_day = {r["day"]: r["total"] for r in rows}
+    finally:
+        conn.close()
+
+    result = []
+    for i in range(days):
+        day = (date.today() - timedelta(days=days - 1 - i)).isoformat()
+        result.append({"day": day, "total": round(by_day.get(day, 0) or 0, 2)})
+    return result
+
+
+def dead_stock_report(days: int = 90) -> list[dict]:
+    """Medicines still in stock that haven't sold at all in the last `days`
+    days (or ever) -- helps clear out slow-moving inventory before it
+    expires unsold."""
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT m.id, m.name, m.category, m.quantity, m.expiry_date,
+                   (SELECT MAX(s.date) FROM sale_items si
+                    JOIN sales s ON s.id = si.sale_id
+                    WHERE si.medicine_id = m.id) AS last_sold
+            FROM medicines m
+            WHERE m.is_active = 1 AND m.quantity > 0
+              AND NOT EXISTS (
+                  SELECT 1 FROM sale_items si
+                  JOIN sales s ON s.id = si.sale_id
+                  WHERE si.medicine_id = m.id AND date(s.date) >= ?
+              )
+            ORDER BY last_sold IS NOT NULL, last_sold ASC, m.name
+            """,
+            (cutoff,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def best_sellers_report(start_date: str, end_date: str, limit: int = 20) -> list[dict]:
+    """Top-selling medicines by quantity within a date range."""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT m.name, m.category, SUM(si.quantity) AS quantity_sold,
+                   SUM(si.subtotal) AS revenue, COUNT(DISTINCT si.sale_id) AS sale_count
+            FROM sale_items si
+            JOIN sales s ON s.id = si.sale_id
+            JOIN medicines m ON m.id = si.medicine_id
+            WHERE date(s.date) BETWEEN ? AND ?
+            GROUP BY si.medicine_id
+            ORDER BY quantity_sold DESC
+            LIMIT ?
+            """,
+            (start_date, end_date, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def controlled_substances_report(start_date: str, end_date: str) -> list[dict]:
+    """Register-style report of every sale of a narcotic/psychotropic
+    medicine, for DRAP (SRO 808(I)/2001) documentation requirements."""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """
+            SELECT s.date, s.invoice_no, m.name AS medicine_name, m.batch_no,
+                   si.quantity, si.unit_price, si.subtotal,
+                   COALESCE(c.name, 'Walk-in') AS customer_name, COALESCE(c.phone, '') AS customer_phone,
+                   u.username AS cashier_name, s.doctor_name
+            FROM sale_items si
+            JOIN sales s ON s.id = si.sale_id
+            JOIN medicines m ON m.id = si.medicine_id
+            LEFT JOIN customers c ON c.id = s.customer_id
+            LEFT JOIN users u ON u.id = s.cashier_id
+            WHERE m.is_controlled_substance = 1 AND date(s.date) BETWEEN ? AND ?
+            ORDER BY s.date
+            """,
+            (start_date, end_date),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def customer_credit_report() -> list[dict]:
+    """Every customer with an outstanding udhaar balance, most-owed first."""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, name, phone, credit_balance FROM customers "
+            "WHERE credit_balance > 0.005 ORDER BY credit_balance DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def expiry_stock_report(within_days: int = 90) -> list[dict]:
     cutoff = (date.today() + timedelta(days=within_days)).isoformat()
     conn = get_connection()

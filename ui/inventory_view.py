@@ -9,6 +9,7 @@ from PySide6.QtCore import QDate, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QComboBox,
     QDateEdit,
     QDialog,
@@ -27,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from logic import auth, barcode_utils, inventory, settings, suppliers
+from logic import audit, auth, barcode_utils, inventory, settings, suppliers
 
 LOW_STOCK_COLOR = QColor("#FFF3CD")
 EXPIRING_COLOR = QColor("#F8D7DA")
@@ -76,6 +77,10 @@ class MedicineEditDialog(QDialog):
         for s in suppliers.list_suppliers():
             self.supplier_input.addItem(s.name, s.id)
 
+        self.controlled_substance_input = QCheckBox(
+            "Narcotic/psychotropic -- requires DRAP register documentation"
+        )
+
         if self.medicine:
             self.name_input.setText(self.medicine.name)
             self.generic_input.setText(self.medicine.generic_name)
@@ -88,6 +93,7 @@ class MedicineEditDialog(QDialog):
             self.purchase_price_input.setValue(self.medicine.purchase_price)
             self.sale_price_input.setValue(self.medicine.sale_price)
             self.threshold_input.setValue(self.medicine.low_stock_threshold)
+            self.controlled_substance_input.setChecked(self.medicine.is_controlled_substance)
             if self.medicine.supplier_id:
                 idx = self.supplier_input.findData(self.medicine.supplier_id)
                 if idx >= 0:
@@ -96,6 +102,7 @@ class MedicineEditDialog(QDialog):
         layout.addRow("Name *", self.name_input)
         layout.addRow("Generic name", self.generic_input)
         layout.addRow("Category", self.category_input)
+        layout.addRow("", self.controlled_substance_input)
 
         barcode_row = QHBoxLayout()
         barcode_row.addWidget(self.barcode_input)
@@ -146,6 +153,7 @@ class MedicineEditDialog(QDialog):
                     supplier_id=supplier_id,
                     low_stock_threshold=self.threshold_input.value(),
                     barcode=self.barcode_input.text(),
+                    is_controlled_substance=self.controlled_substance_input.isChecked(),
                 )
             else:
                 inventory.update_medicine(
@@ -161,6 +169,7 @@ class MedicineEditDialog(QDialog):
                     supplier_id=supplier_id,
                     low_stock_threshold=self.threshold_input.value(),
                     barcode=self.barcode_input.text(),
+                    is_controlled_substance=self.controlled_substance_input.isChecked(),
                 )
             self.accept()
         except ValueError as e:
@@ -303,8 +312,9 @@ class InventoryView(QWidget):
 
         self.table.setRowCount(len(medicines))
         for row, m in enumerate(medicines):
+            display_name = f"🔒 {m.name}" if m.is_controlled_substance else m.name
             values = [
-                m.name, m.generic_name, m.category, m.barcode, m.batch_no,
+                display_name, m.generic_name, m.category, m.barcode, m.batch_no,
                 m.expiry_date, str(m.quantity), f"{m.purchase_price:.2f}",
                 f"{m.sale_price:.2f}", m.supplier_name or "",
             ]
@@ -358,4 +368,6 @@ class InventoryView(QWidget):
         if reply != QMessageBox.Yes:
             return
         inventory.delete_medicine(medicine.id)
+        audit.log(self.current_user.id, self.current_user.username, "delete_medicine",
+                   f"deleted medicine '{medicine.name}' (batch {medicine.batch_no})")
         self.refresh()

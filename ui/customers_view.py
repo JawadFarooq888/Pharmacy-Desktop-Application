@@ -1,7 +1,11 @@
-"""Customer management screen: add/edit/delete + view a customer's sales history."""
+"""Customer management screen: add/edit/delete, udhaar (credit) balance and
+payment recording, and viewing a customer's sales history."""
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QDialog,
+    QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
     QHeaderView,
@@ -16,6 +20,9 @@ from PySide6.QtWidgets import (
 )
 
 from logic import customers
+from logic.sales import PAYMENT_METHOD_LABELS
+
+CREDIT_COLOR = QColor("#FFF3CD")
 
 
 class CustomerEditDialog(QDialog):
@@ -61,14 +68,19 @@ class CustomerEditDialog(QDialog):
 class CustomerHistoryDialog(QDialog):
     def __init__(self, parent, customer: customers.Customer):
         super().__init__(parent)
-        self.setWindowTitle(f"Sales History — {customer.name}")
-        self.setMinimumSize(480, 320)
+        self.setWindowTitle(f"History — {customer.name}")
+        self.setMinimumSize(560, 420)
         layout = QVBoxLayout()
 
-        table = QTableWidget(0, 3)
-        table.setHorizontalHeaderLabels(["Invoice No.", "Date", "Total"])
+        sales_label = QLabel("Sales")
+        sales_label.setProperty("subheading", True)
+        layout.addWidget(sales_label)
+
+        table = QTableWidget(0, 4)
+        table.setHorizontalHeaderLabels(["Invoice No.", "Date", "Total", "Paid"])
         table.setColumnWidth(0, 150)
         table.setColumnWidth(2, 80)
+        table.setColumnWidth(3, 80)
         table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         table.verticalHeader().setVisible(False)
@@ -79,11 +91,89 @@ class CustomerHistoryDialog(QDialog):
             table.setItem(row, 0, QTableWidgetItem(sale["invoice_no"]))
             table.setItem(row, 1, QTableWidgetItem(sale["date"]))
             table.setItem(row, 2, QTableWidgetItem(f"{sale['total_amount']:.2f}"))
-
+            table.setItem(row, 3, QTableWidgetItem(f"{sale['amount_paid']:.2f}"))
         layout.addWidget(table)
         if not history:
             layout.addWidget(QLabel("No sales recorded for this customer yet."))
+
+        payments_label = QLabel("Udhaar Payments Received")
+        payments_label.setProperty("subheading", True)
+        layout.addWidget(payments_label)
+
+        pay_table = QTableWidget(0, 4)
+        pay_table.setHorizontalHeaderLabels(["Date", "Amount", "Method", "Note"])
+        pay_table.setColumnWidth(1, 80)
+        pay_table.setColumnWidth(2, 100)
+        pay_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        pay_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        pay_table.verticalHeader().setVisible(False)
+
+        payments = customers.payment_history(customer.id)
+        pay_table.setRowCount(len(payments))
+        for row, p in enumerate(payments):
+            pay_table.setItem(row, 0, QTableWidgetItem(p["date"]))
+            pay_table.setItem(row, 1, QTableWidgetItem(f"{p['amount']:.2f}"))
+            pay_table.setItem(row, 2, QTableWidgetItem(PAYMENT_METHOD_LABELS.get(p["payment_method"], p["payment_method"])))
+            pay_table.setItem(row, 3, QTableWidgetItem(p["note"] or ""))
+        layout.addWidget(pay_table)
+        if not payments:
+            layout.addWidget(QLabel("No udhaar payments recorded yet."))
+
         self.setLayout(layout)
+
+
+class RecordPaymentDialog(QDialog):
+    """Record a customer paying down some or all of their udhaar balance."""
+
+    def __init__(self, parent, customer: customers.Customer, recorded_by: int):
+        super().__init__(parent)
+        self.customer = customer
+        self.recorded_by = recorded_by
+        self.setWindowTitle(f"Record Payment — {customer.name}")
+        self.setMinimumWidth(360)
+
+        layout = QFormLayout()
+        balance_label = QLabel(f"Outstanding balance: {customer.credit_balance:.2f}")
+        balance_label.setProperty("warning", True)
+        layout.addRow(balance_label)
+
+        self.amount_input = QDoubleSpinBox()
+        self.amount_input.setRange(0.01, customer.credit_balance)
+        self.amount_input.setDecimals(2)
+        self.amount_input.setValue(customer.credit_balance)
+        layout.addRow("Amount received *", self.amount_input)
+
+        self.method_input = QComboBox()
+        for value, label in PAYMENT_METHOD_LABELS.items():
+            if value != "udhaar":
+                self.method_input.addItem(label, value)
+        layout.addRow("Payment method", self.method_input)
+
+        self.note_input = QLineEdit()
+        layout.addRow("Note (optional)", self.note_input)
+
+        buttons = QHBoxLayout()
+        save_btn = QPushButton("💾  Record Payment")
+        save_btn.setProperty("success", True)
+        save_btn.clicked.connect(self._save)
+        cancel_btn = QPushButton("✖️  Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        buttons.addWidget(save_btn)
+        buttons.addWidget(cancel_btn)
+        layout.addRow(buttons)
+        self.setLayout(layout)
+
+    def _save(self):
+        try:
+            customers.record_payment(
+                self.customer.id, self.amount_input.value(), self.method_input.currentData(),
+                self.recorded_by, self.note_input.text(),
+            )
+            self.accept()
+        except ValueError as e:
+            QMessageBox.warning(self, "Cannot record payment", str(e))
+        except Exception as e:
+            QMessageBox.critical(self, "Cannot record payment", f"An unexpected error occurred:\n{e}")
 
 
 class CustomersView(QWidget):
@@ -116,14 +206,14 @@ class CustomersView(QWidget):
         layout.addWidget(self.search_input)
 
         self.table = QTableWidget(0, 4)
-        self.table.setHorizontalHeaderLabels(["Name", "Phone", "", "Actions"])
+        self.table.setHorizontalHeaderLabels(["Name", "Phone", "Udhaar Balance", "Actions"])
         self.table.setColumnWidth(1, 140)
+        self.table.setColumnWidth(2, 120)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        self.table.setColumnHidden(2, True)
         layout.addWidget(self.table)
 
         self.setLayout(layout)
@@ -141,6 +231,10 @@ class CustomersView(QWidget):
         for row, c in enumerate(rows):
             self.table.setItem(row, 0, QTableWidgetItem(c.name))
             self.table.setItem(row, 1, QTableWidgetItem(c.phone))
+            balance_item = QTableWidgetItem(f"{c.credit_balance:.2f}" if c.has_credit else "-")
+            if c.has_credit:
+                balance_item.setBackground(CREDIT_COLOR)
+            self.table.setItem(row, 2, balance_item)
 
             actions = QWidget()
             actions_layout = QHBoxLayout()
@@ -150,6 +244,13 @@ class CustomersView(QWidget):
             history_btn.setProperty("compact", True)
             history_btn.clicked.connect(lambda _, cust=c: self._show_history(cust))
             actions_layout.addWidget(history_btn)
+
+            if c.has_credit and self.current_user is not None:
+                pay_btn = QPushButton("💰  Record Payment")
+                pay_btn.setProperty("compact", True)
+                pay_btn.setProperty("success", True)
+                pay_btn.clicked.connect(lambda _, cust=c: self._record_payment(cust))
+                actions_layout.addWidget(pay_btn)
 
             is_admin = self.current_user is None or self.current_user.is_admin
             if is_admin:
@@ -175,6 +276,11 @@ class CustomersView(QWidget):
         if dialog.exec() == QDialog.Accepted:
             self.refresh()
 
+    def _record_payment(self, customer: customers.Customer):
+        dialog = RecordPaymentDialog(self, customer, self.current_user.id)
+        if dialog.exec() == QDialog.Accepted:
+            self.refresh()
+
     def _show_history(self, customer: customers.Customer):
         CustomerHistoryDialog(self, customer).exec()
 
@@ -188,5 +294,8 @@ class CustomersView(QWidget):
         )
         if reply != QMessageBox.Yes:
             return
-        customers.delete_customer(customer.id)
-        self.refresh()
+        try:
+            customers.delete_customer(customer.id)
+            self.refresh()
+        except ValueError as e:
+            QMessageBox.warning(self, "Cannot delete", str(e))

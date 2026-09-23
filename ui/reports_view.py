@@ -227,6 +227,122 @@ class ExpiryStockTab(_ReportTab):
         self._set_data(f"Expiry Stock Report {within_days}d", headers, rows, summary)
 
 
+class DeadStockTab(_ReportTab):
+    def __init__(self):
+        super().__init__()
+        self.days_input = QSpinBox()
+        self.days_input.setRange(1, 3650)
+        self.days_input.setValue(90)
+        self.controls_layout.addWidget(QLabel("No sales in (days):"))
+        self.controls_layout.addWidget(self.days_input)
+        refresh_btn = QPushButton("🔄  Refresh")
+        refresh_btn.clicked.connect(self.refresh)
+        self.controls_layout.addWidget(refresh_btn)
+        self.controls_layout.addStretch()
+        self.refresh()
+
+    def refresh(self):
+        days = self.days_input.value()
+        data = reports.dead_stock_report(days)
+        headers = ["Medicine", "Category", "Qty In Stock", "Expiry Date", "Last Sold"]
+        rows = [
+            [d["name"], d["category"] or "", d["quantity"], d["expiry_date"] or "", d["last_sold"] or "Never"]
+            for d in data
+        ]
+        summary = f"Dead Stock — no sales in {days} days   |   {len(data)} medicine(s) tying up stock"
+        self._set_data(f"Dead Stock Report {days}d", headers, rows, summary)
+
+
+class BestSellersTab(_ReportTab):
+    def __init__(self):
+        super().__init__()
+        self.start_input = QDateEdit()
+        self.start_input.setCalendarPopup(True)
+        self.start_input.setDisplayFormat("yyyy-MM-dd")
+        self.start_input.setDate(QDate.currentDate().addDays(-30))
+        self.end_input = QDateEdit()
+        self.end_input.setCalendarPopup(True)
+        self.end_input.setDisplayFormat("yyyy-MM-dd")
+        self.end_input.setDate(QDate.currentDate())
+        self.controls_layout.addWidget(QLabel("From:"))
+        self.controls_layout.addWidget(self.start_input)
+        self.controls_layout.addWidget(QLabel("To:"))
+        self.controls_layout.addWidget(self.end_input)
+        refresh_btn = QPushButton("🔄  Refresh")
+        refresh_btn.clicked.connect(self.refresh)
+        self.controls_layout.addWidget(refresh_btn)
+        self.controls_layout.addStretch()
+        self.refresh()
+
+    def refresh(self):
+        start = self.start_input.date().toString("yyyy-MM-dd")
+        end = self.end_input.date().toString("yyyy-MM-dd")
+        data = reports.best_sellers_report(start, end, limit=50)
+        headers = ["Medicine", "Category", "Qty Sold", "Revenue", "Sales Count"]
+        rows = [
+            [d["name"], d["category"] or "", d["quantity_sold"], f"{d['revenue']:.2f}", d["sale_count"]]
+            for d in data
+        ]
+        summary = f"Best Sellers — {start} to {end}   |   Top {len(data)} medicine(s) by quantity sold"
+        self._set_data(f"Best Sellers {start}_to_{end}", headers, rows, summary)
+
+
+class ControlledSubstancesTab(_ReportTab):
+    def __init__(self):
+        super().__init__()
+        self.start_input = QDateEdit()
+        self.start_input.setCalendarPopup(True)
+        self.start_input.setDisplayFormat("yyyy-MM-dd")
+        self.start_input.setDate(QDate.currentDate().addDays(-30))
+        self.end_input = QDateEdit()
+        self.end_input.setCalendarPopup(True)
+        self.end_input.setDisplayFormat("yyyy-MM-dd")
+        self.end_input.setDate(QDate.currentDate())
+        self.controls_layout.addWidget(QLabel("From:"))
+        self.controls_layout.addWidget(self.start_input)
+        self.controls_layout.addWidget(QLabel("To:"))
+        self.controls_layout.addWidget(self.end_input)
+        refresh_btn = QPushButton("🔄  Refresh")
+        refresh_btn.clicked.connect(self.refresh)
+        self.controls_layout.addWidget(refresh_btn)
+        self.controls_layout.addStretch()
+        self.refresh()
+
+    def refresh(self):
+        start = self.start_input.date().toString("yyyy-MM-dd")
+        end = self.end_input.date().toString("yyyy-MM-dd")
+        data = reports.controlled_substances_report(start, end)
+        headers = ["Date", "Invoice No.", "Medicine", "Batch No.", "Qty", "Customer", "Phone", "Cashier", "Doctor"]
+        rows = [
+            [d["date"], d["invoice_no"], d["medicine_name"], d["batch_no"] or "", d["quantity"],
+             d["customer_name"], d["customer_phone"], d["cashier_name"], d["doctor_name"] or ""]
+            for d in data
+        ]
+        summary = (
+            f"Controlled Substances Register — {start} to {end}   |   {len(data)} entries "
+            "(DRAP SRO 808(I)/2001 documentation)"
+        )
+        self._set_data(f"Controlled Substances Register {start}_to_{end}", headers, rows, summary)
+
+
+class CustomerCreditTab(_ReportTab):
+    def __init__(self):
+        super().__init__()
+        refresh_btn = QPushButton("🔄  Refresh")
+        refresh_btn.clicked.connect(self.refresh)
+        self.controls_layout.addWidget(refresh_btn)
+        self.controls_layout.addStretch()
+        self.refresh()
+
+    def refresh(self):
+        data = reports.customer_credit_report()
+        headers = ["Customer", "Phone", "Outstanding Balance"]
+        rows = [[d["name"], d["phone"] or "", f"{d['credit_balance']:.2f}"] for d in data]
+        total_owed = sum(d["credit_balance"] for d in data)
+        summary = f"Udhaar (Credit) Summary   |   {len(data)} customer(s) owe a total of {total_owed:.2f}"
+        self._set_data("Udhaar Credit Summary", headers, rows, summary)
+
+
 class ReportsView(QWidget):
     def __init__(self):
         super().__init__()
@@ -240,6 +356,10 @@ class ReportsView(QWidget):
         tabs.addTab(MonthlySalesTab(), "Monthly Sales")
         tabs.addTab(ProfitLossTab(), "Profit / Loss")
         tabs.addTab(ExpiryStockTab(), "Expiry Stock")
+        tabs.addTab(DeadStockTab(), "Dead Stock")
+        tabs.addTab(BestSellersTab(), "Best Sellers")
+        tabs.addTab(CustomerCreditTab(), "Udhaar Summary")
+        tabs.addTab(ControlledSubstancesTab(), "Controlled Substances")
         layout.addWidget(tabs)
 
         self.setLayout(layout)

@@ -100,6 +100,63 @@ window on the same data).
 - **Cashier**: Billing (POS) and read-only Inventory/Customers/Reports. No
   edit/delete rights.
 
+## Payment methods & Udhaar (credit)
+
+Billing supports six payment methods: Cash, Card, EasyPaisa, JazzCash, Bank
+Transfer, and **Udhaar (credit)**. A sale doesn't have to be fully paid or
+fully credit — the cashier enters an **Amount Paid**, and whatever is left
+of the total is automatically added to that customer's udhaar balance
+(walk-in customers can't be given credit; a customer must be selected
+first). The Customers screen shows each customer's outstanding balance and
+has a **Record Payment** button to log partial or full udhaar repayments
+(cash, card, or any other method) — the balance and the customer's payment
+history update immediately. A customer with an outstanding balance cannot
+be deleted until it's settled. Reports → Customer Credit lists every
+customer who currently owes money, most-owed first, so following up on
+udhaar is a two-click task instead of manual bookkeeping.
+
+## Returns & refunds
+
+The Returns page finds any past sale by invoice number and lets you return
+specific line items, in full or partial quantity (e.g. 2 of the 5 strips
+sold). Returning an item restocks it back into Inventory automatically. If
+that sale was paid partly or fully on udhaar, the refund reduces the
+customer's outstanding balance first, and only the remainder (if any) is
+handed back as cash — so a return can never accidentally overpay a
+customer or under-correct their credit.
+
+## Controlled substances (DRAP compliance)
+
+Medicines that are narcotics/psychotropics can be flagged **🔒 Controlled
+Substance** in Inventory → Add/Edit Medicine. Every sale of a flagged
+medicine is automatically captured in Reports → Controlled Substances, a
+register-style report (date, invoice, medicine, batch, quantity, customer,
+prescribing doctor, cashier) matching the documentation format pharmacies
+need for DRAP (SRO 808(I)/2001) inspections. The Billing screen also has an
+optional **Doctor Name** field for exactly this purpose.
+
+## Thermal printer support
+
+Settings → General lets you choose the receipt format: full-page **A5**
+(for a regular printer) or narrow **58mm** / **80mm** (for thermal POS
+printers). Checkout prints straight to the shop's default printer — no
+manual "open the PDF, then print" step — using Windows' native print verb.
+
+## Audit log
+
+Settings → Audit Log keeps a running record of sensitive actions (large
+discounts, udhaar sales, medicine/customer deletions, database restores,
+user management changes) with who did it and when — useful for tracing
+"who changed this" months later without digging through backups.
+
+## More reports
+
+Beyond daily/monthly sales and profit/loss, Reports now also has: **Dead
+Stock** (medicines sitting unsold for 90+ days, so they can be discounted
+or returned to the supplier before they expire), **Best Sellers** (top
+medicines by quantity sold in a date range), and a 7-day sales trend chart
+on the Dashboard.
+
 ## Barcode scanning (Billing)
 
 A USB/Bluetooth barcode scanner is just a keyboard emulator — it "types" the

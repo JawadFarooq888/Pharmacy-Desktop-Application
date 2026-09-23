@@ -26,8 +26,9 @@ from logic import backup
 
 
 class BackupView(QWidget):
-    def __init__(self):
+    def __init__(self, current_user=None):
         super().__init__()
+        self.current_user = current_user
         self._build_ui()
         self.refresh()
 
@@ -172,7 +173,8 @@ class BackupView(QWidget):
         QApplication.processEvents()
 
         try:
-            backup.restore_backup(file_path)
+            username = self.current_user.username if self.current_user else ""
+            backup.restore_backup(file_path, performed_by=username)
         except Exception as e:
             progress.close()
             QMessageBox.critical(self, "Restore Failed", f"The restore could not be completed:\n{e}")

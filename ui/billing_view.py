@@ -19,7 +19,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from logic import auth, customers, inventory, invoice_pdf, sales
+from logic import audit, auth, customers, inventory, invoice_pdf, printing, sales, settings, thermal_receipt
+from logic.sales import PAYMENT_METHOD_LABELS
 
 
 class BillingView(QWidget):
@@ -85,11 +86,23 @@ class BillingView(QWidget):
         customer_row = QHBoxLayout()
         customer_row.addWidget(QLabel("Customer:"))
         self.customer_input = QComboBox()
+        self.customer_input.currentIndexChanged.connect(self._update_credit_label)
         customer_row.addWidget(self.customer_input)
         refresh_cust_btn = QPushButton("🔄  Refresh")
         refresh_cust_btn.clicked.connect(self._reload_customers)
         customer_row.addWidget(refresh_cust_btn)
         right.addLayout(customer_row)
+
+        self.credit_label = QLabel("")
+        self.credit_label.setProperty("warning", True)
+        right.addWidget(self.credit_label)
+
+        doctor_row = QHBoxLayout()
+        doctor_row.addWidget(QLabel("Doctor (optional):"))
+        self.doctor_input = QLineEdit()
+        self.doctor_input.setPlaceholderText("For prescription medicines")
+        doctor_row.addWidget(self.doctor_input)
+        right.addLayout(doctor_row)
 
         discount_row = QHBoxLayout()
         discount_row.addWidget(QLabel("Discount:"))
@@ -106,6 +119,26 @@ class BillingView(QWidget):
         self.tax_input.valueChanged.connect(self._recalculate)
         discount_row.addWidget(self.tax_input)
         right.addLayout(discount_row)
+
+        payment_row = QHBoxLayout()
+        payment_row.addWidget(QLabel("Payment:"))
+        self.payment_method_input = QComboBox()
+        for value, label in PAYMENT_METHOD_LABELS.items():
+            self.payment_method_input.addItem(label, value)
+        self.payment_method_input.currentIndexChanged.connect(self._on_payment_method_changed)
+        payment_row.addWidget(self.payment_method_input)
+
+        payment_row.addWidget(QLabel("Amount Paid Now:"))
+        self.amount_paid_input = QDoubleSpinBox()
+        self.amount_paid_input.setRange(0, 10_000_000)
+        self.amount_paid_input.setDecimals(2)
+        self.amount_paid_input.valueChanged.connect(self._recalculate)
+        payment_row.addWidget(self.amount_paid_input)
+        right.addLayout(payment_row)
+
+        self.credit_preview_label = QLabel("")
+        self.credit_preview_label.setProperty("warning", True)
+        right.addWidget(self.credit_preview_label)
 
         self.totals_label = QLabel("Subtotal: 0.00   Total: 0.00")
         self.totals_label.setProperty("heading", True)
@@ -137,6 +170,25 @@ class BillingView(QWidget):
         idx = self.customer_input.findData(current)
         self.customer_input.setCurrentIndex(idx if idx >= 0 else 0)
         self.customer_input.blockSignals(False)
+        self._update_credit_label()
+
+    def _update_credit_label(self):
+        customer_id = self.customer_input.currentData()
+        if customer_id is None:
+            self.credit_label.setText("")
+            return
+        cust = customers.get_customer(customer_id)
+        if cust and cust.has_credit:
+            self.credit_label.setText(f"⚠️  This customer already owes {cust.credit_balance:.2f} in udhaar.")
+        else:
+            self.credit_label.setText("")
+
+    def _on_payment_method_changed(self):
+        method = self.payment_method_input.currentData()
+        if method == "udhaar":
+            self.amount_paid_input.setValue(0.0)
+        else:
+            self.amount_paid_input.setValue(self.cart.total)
 
     def refresh_search(self):
         text = self.search_input.text().strip()
@@ -207,6 +259,11 @@ class BillingView(QWidget):
             remove_btn.clicked.connect(lambda _, mid=item.medicine_id: self._remove_from_cart(mid))
             self.cart_table.setCellWidget(row, 4, remove_btn)
         self._recalculate()
+        if self.payment_method_input.currentData() != "udhaar":
+            self.amount_paid_input.blockSignals(True)
+            self.amount_paid_input.setValue(self.cart.total)
+            self.amount_paid_input.blockSignals(False)
+            self._update_totals_label()
 
     def _remove_from_cart(self, medicine_id: int):
         self.cart.remove(medicine_id)
@@ -216,6 +273,8 @@ class BillingView(QWidget):
         self.cart.clear()
         self.discount_input.setValue(0)
         self.tax_input.setValue(0)
+        self.payment_method_input.setCurrentIndex(0)
+        self.doctor_input.clear()
         self._render_cart()
 
     def _recalculate(self):
@@ -226,29 +285,50 @@ class BillingView(QWidget):
 
         self.cart.discount = self.discount_input.value()
         self.cart.tax_percent = self.tax_input.value()
+        # Amount paid can never exceed the total -- clamp rather than allow
+        # a value that checkout() would just reject anyway.
+        self.amount_paid_input.setMaximum(max(self.cart.total, 0.0))
+        self._update_totals_label()
+
+    def _update_totals_label(self):
         self.totals_label.setText(
             f"Subtotal: {self.cart.subtotal:.2f}   Discount: {self.cart.discount:.2f}   "
             f"Tax: {self.cart.tax_amount:.2f}   Total: {self.cart.total:.2f}"
         )
+        remaining = round(self.cart.total - self.amount_paid_input.value(), 2)
+        if remaining > 0.005:
+            self.credit_preview_label.setText(
+                f"📒  {remaining:.2f} will be added to the selected customer's udhaar balance."
+            )
+        else:
+            self.credit_preview_label.setText("")
 
     def _checkout(self):
         if not self.cart.items:
             QMessageBox.information(self, "Empty cart", "Add at least one medicine before checking out.")
             return
 
+        amount_paid = self.amount_paid_input.value()
+        remaining = round(self.cart.total - amount_paid, 2)
+        confirm_msg = f"Complete this sale for a total of {self.cart.total:.2f}?"
+        if remaining > 0.005:
+            confirm_msg += f"\n\n{remaining:.2f} will be added to the customer's udhaar balance."
         reply = QMessageBox.question(
-            self,
-            "Confirm Sale",
-            f"Complete this sale for a total of {self.cart.total:.2f}?",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No,
+            self, "Confirm Sale", confirm_msg, QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
             return
 
         try:
             customer_id = self.customer_input.currentData()
-            receipt = sales.checkout(self.cart, cashier_id=self.current_user.id, customer_id=customer_id)
+            receipt = sales.checkout(
+                self.cart,
+                cashier_id=self.current_user.id,
+                customer_id=customer_id,
+                payment_method=self.payment_method_input.currentData(),
+                amount_paid=amount_paid,
+                doctor_name=self.doctor_input.text(),
+            )
         except ValueError as e:
             QMessageBox.warning(self, "Checkout failed", str(e))
             return
@@ -258,18 +338,47 @@ class BillingView(QWidget):
             QMessageBox.critical(self, "Checkout failed", f"The sale could not be completed:\n{e}")
             return
 
-        customer_name = self.customer_input.currentText()
-        try:
-            pdf_path = invoice_pdf.generate_invoice_pdf(
-                receipt, customer_name=customer_name, cashier_name=self.current_user.username
+        # Flag anything a shop owner would want visibility into later: a
+        # meaningful discount, or a sale that added to a customer's udhaar.
+        if receipt["discount"] > 0 and receipt["discount"] >= 0.1 * receipt["subtotal"]:
+            audit.log(
+                self.current_user.id, self.current_user.username, "large_discount",
+                f"invoice {receipt['invoice_no']}: discount {receipt['discount']:.2f} "
+                f"on subtotal {receipt['subtotal']:.2f}",
             )
-            msg = f"Sale complete!\nInvoice: {receipt['invoice_no']}\nTotal: {receipt['total']:.2f}\n\nInvoice PDF saved to:\n{pdf_path}"
+        if receipt["credit_amount"] > 0.005:
+            audit.log(
+                self.current_user.id, self.current_user.username, "udhaar_sale",
+                f"invoice {receipt['invoice_no']}: {receipt['credit_amount']:.2f} added to customer credit",
+            )
+
+        customer_name = self.customer_input.currentText()
+        receipt_format = settings.get_receipt_format()
+        shop_name = settings.get_shop_name()
+        try:
+            if receipt_format in ("58mm", "80mm"):
+                pdf_path = thermal_receipt.generate_thermal_receipt(
+                    receipt, width=receipt_format, customer_name=customer_name,
+                    cashier_name=self.current_user.username, shop_name=shop_name,
+                )
+            else:
+                pdf_path = invoice_pdf.generate_invoice_pdf(
+                    receipt, customer_name=customer_name, cashier_name=self.current_user.username,
+                    shop_name=shop_name,
+                )
+            printed = printing.print_document(pdf_path)
+            msg = f"Sale complete!\nInvoice: {receipt['invoice_no']}\nTotal: {receipt['total']:.2f}\n\n"
+            msg += f"Sent to printer ({receipt_format}).\n" if printed else ""
+            msg += f"Receipt saved to:\n{pdf_path}"
         except Exception as e:
             msg = (
                 f"Sale complete!\nInvoice: {receipt['invoice_no']}\nTotal: {receipt['total']:.2f}\n\n"
-                f"(Could not generate PDF: {e})"
+                f"(Could not generate/print receipt: {e})"
             )
+        if receipt["credit_amount"] > 0.005:
+            msg += f"\n\n📒 Udhaar added: {receipt['credit_amount']:.2f}"
         QMessageBox.information(self, "Sale Complete", msg)
 
+        self._reload_customers()
         self._clear_cart()
         self.refresh_search()

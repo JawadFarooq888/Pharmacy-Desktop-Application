@@ -30,3 +30,15 @@ def get_low_stock_threshold() -> int:
 
 def get_expiry_alert_days() -> int:
     return int(get_setting("expiry_alert_days", "30"))
+
+
+RECEIPT_FORMATS = {"A5": "A5 (full page)", "58mm": "58mm thermal", "80mm": "80mm thermal"}
+
+
+def get_receipt_format() -> str:
+    value = get_setting("receipt_format", "A5")
+    return value if value in RECEIPT_FORMATS else "A5"
+
+
+def get_shop_name() -> str:
+    return get_setting("shop_name", "Pharmacy Management System")

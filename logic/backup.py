@@ -202,7 +202,7 @@ def run_auto_backup_on_exit() -> None:
         pass
 
 
-def restore_backup(backup_file_path: str) -> None:
+def restore_backup(backup_file_path: str, performed_by: str = "") -> None:
     """Replace the live DB with the given backup file. The caller is
     responsible for closing any open DB connections and restarting the app
     afterward (SQLite connections in this app are short-lived per-call, so
@@ -218,6 +218,20 @@ def restore_backup(backup_file_path: str) -> None:
     if DB_PATH.exists():
         safety_path = DATA_DIR / f"pre_restore_safety_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.db"
         shutil.copy2(DB_PATH, safety_path)
+
+    # A restore *replaces* the database, so an audit_log row about it would
+    # be wiped out by the very act of restoring (the incoming backup's own
+    # audit_log doesn't have it). Record it in a plain text file next to the
+    # backups instead, which survives independently of any restore.
+    try:
+        log_path = BACKUP_DIR / "restore_history.log"
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(
+                f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  "
+                f"user={performed_by or 'unknown'}  restored_from={src.name}\n"
+            )
+    except Exception:
+        pass  # never block a restore over a logging failure
 
     shutil.copy2(src, DB_PATH)
 

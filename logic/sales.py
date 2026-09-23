@@ -1,11 +1,23 @@
-"""Billing / POS business logic: build a cart, compute totals, and commit a sale
-as one atomic transaction (insert sale + sale_items, deduct stock)."""
+"""Billing / POS business logic: build a cart, compute totals, commit a sale
+(insert sale + sale_items, deduct stock, track udhaar/credit) as one atomic
+transaction, and process returns/refunds against a past sale."""
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime
 
 from database.db_manager import get_connection
 from logic import inventory
+
+VALID_PAYMENT_METHODS = ("cash", "card", "easypaisa", "jazzcash", "bank", "udhaar")
+
+PAYMENT_METHOD_LABELS = {
+    "cash": "💵 Cash",
+    "card": "💳 Card",
+    "easypaisa": "📱 EasyPaisa",
+    "jazzcash": "📱 JazzCash",
+    "bank": "🏦 Bank Transfer",
+    "udhaar": "📒 Udhaar (Credit)",
+}
 
 
 @dataclass
@@ -92,15 +104,45 @@ def _generate_invoice_no(conn) -> str:
     return f"INV-{today}-{seq:04d}"
 
 
-def checkout(cart: Cart, cashier_id: int, customer_id: int = None) -> dict:
-    """Commit the cart as a sale: creates sales + sale_items rows and deducts
-    stock, all inside one transaction. Returns a receipt dict for printing."""
+def checkout(
+    cart: Cart,
+    cashier_id: int,
+    customer_id: int = None,
+    payment_method: str = "cash",
+    amount_paid: float = None,
+    doctor_name: str = "",
+) -> dict:
+    """Commit the cart as a sale: creates sales + sale_items rows, deducts
+    stock, and (if `amount_paid` is less than the total) adds the remainder
+    to the selected customer's udhaar balance -- all inside one transaction.
+    Returns a receipt dict for printing.
+
+    `amount_paid=None` means "paid in full" (the whole total), except when
+    payment_method is "udhaar", where it means "nothing paid now" (0) --
+    matching what a cashier picking that method from a dropdown expects.
+    """
     if not cart.items:
         raise ValueError("Cannot checkout an empty cart.")
     if cart.discount < 0:
         raise ValueError("Discount cannot be negative.")
     if cart.discount > cart.subtotal:
         raise ValueError("Discount cannot exceed the subtotal.")
+    if payment_method not in VALID_PAYMENT_METHODS:
+        raise ValueError(f"Unknown payment method '{payment_method}'.")
+
+    total = cart.total
+    if amount_paid is None:
+        amount_paid = 0.0 if payment_method == "udhaar" else total
+    if amount_paid < 0:
+        raise ValueError("Amount paid cannot be negative.")
+    if amount_paid > total + 0.005:
+        raise ValueError("Amount paid cannot be more than the sale total.")
+
+    credit_amount = round(total - amount_paid, 2)
+    if credit_amount > 0.005 and customer_id is None:
+        raise ValueError(
+            "A walk-in sale must be paid in full -- select a customer to extend udhaar (credit)."
+        )
 
     conn = get_connection()
     try:
@@ -125,9 +167,12 @@ def checkout(cart: Cart, cashier_id: int, customer_id: int = None) -> dict:
             invoice_no = _generate_invoice_no(conn)
             try:
                 cur = conn.execute(
-                    "INSERT INTO sales (invoice_no, customer_id, cashier_id, total_amount, discount, tax) "
-                    "VALUES (?, ?, ?, ?, ?, ?)",
-                    (invoice_no, customer_id, cashier_id, cart.total, cart.discount, cart.tax_amount),
+                    "INSERT INTO sales (invoice_no, customer_id, cashier_id, total_amount, discount, "
+                    "tax, payment_method, amount_paid, doctor_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        invoice_no, customer_id, cashier_id, total, cart.discount,
+                        cart.tax_amount, payment_method, amount_paid, doctor_name.strip() or None,
+                    ),
                 )
                 sale_id = cur.lastrowid
                 break
@@ -148,6 +193,12 @@ def checkout(cart: Cart, cashier_id: int, customer_id: int = None) -> dict:
                 (item.quantity, item.medicine_id),
             )
 
+        if credit_amount > 0.005:
+            conn.execute(
+                "UPDATE customers SET credit_balance = credit_balance + ? WHERE id = ?",
+                (credit_amount, customer_id),
+            )
+
         conn.commit()
     except Exception:
         conn.rollback()
@@ -162,9 +213,13 @@ def checkout(cart: Cart, cashier_id: int, customer_id: int = None) -> dict:
         "subtotal": cart.subtotal,
         "discount": cart.discount,
         "tax": cart.tax_amount,
-        "total": cart.total,
+        "total": total,
         "customer_id": customer_id,
         "cashier_id": cashier_id,
+        "payment_method": payment_method,
+        "amount_paid": amount_paid,
+        "credit_amount": credit_amount,
+        "doctor_name": doctor_name.strip(),
         "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
@@ -194,5 +249,101 @@ def get_sale_with_items(sale_id: int) -> dict:
             (sale_id,),
         ).fetchall()
         return {"sale": dict(sale), "items": [dict(i) for i in items]}
+    finally:
+        conn.close()
+
+
+def process_return(sale_item_id: int, quantity: int, reason: str, processed_by: int) -> dict:
+    """Return `quantity` units of one sale line item: restocks inventory and
+    logs the refund. If the original sale still has an unpaid (udhaar)
+    balance, the refund reduces that balance first rather than handing back
+    cash that was never actually collected; any amount beyond what's still
+    owed is a cash refund. Returns how much of each so the cashier knows
+    what to actually hand back."""
+    if quantity <= 0:
+        raise ValueError("Return quantity must be positive.")
+
+    conn = get_connection()
+    try:
+        item = conn.execute("SELECT * FROM sale_items WHERE id=?", (sale_item_id,)).fetchone()
+        if item is None:
+            raise ValueError("Sale item not found.")
+        remaining = item["quantity"] - item["returned_qty"]
+        if quantity > remaining:
+            raise ValueError(f"Only {remaining} unit(s) can still be returned from this line.")
+
+        sale = conn.execute("SELECT * FROM sales WHERE id=?", (item["sale_id"],)).fetchone()
+        refund_amount = round(item["unit_price"] * quantity, 2)
+
+        conn.execute(
+            "UPDATE sale_items SET returned_qty = returned_qty + ? WHERE id=?", (quantity, sale_item_id)
+        )
+        conn.execute(
+            "UPDATE medicines SET quantity = quantity + ?, updated_at=datetime('now','localtime') WHERE id=?",
+            (quantity, item["medicine_id"]),
+        )
+        conn.execute(
+            "INSERT INTO sale_returns (sale_id, sale_item_id, medicine_id, quantity, refund_amount, "
+            "reason, processed_by) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (item["sale_id"], sale_item_id, item["medicine_id"], quantity, refund_amount,
+             reason.strip(), processed_by),
+        )
+
+        credit_reduction = 0.0
+        if sale["customer_id"] is not None:
+            outstanding = round(sale["total_amount"] - sale["amount_paid"], 2)
+            if outstanding > 0.005:
+                credit_reduction = min(refund_amount, outstanding)
+                conn.execute(
+                    "UPDATE customers SET credit_balance = credit_balance - ? WHERE id=?",
+                    (credit_reduction, sale["customer_id"]),
+                )
+                conn.execute(
+                    "UPDATE sales SET amount_paid = amount_paid + ? WHERE id=?",
+                    (credit_reduction, sale["id"]),
+                )
+
+        all_items = conn.execute(
+            "SELECT quantity, returned_qty FROM sale_items WHERE sale_id=?", (sale["id"],)
+        ).fetchall()
+        if all(r["quantity"] == r["returned_qty"] for r in all_items):
+            conn.execute("UPDATE sales SET is_refunded=1 WHERE id=?", (sale["id"],))
+
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+    return {
+        "refund_amount": refund_amount,
+        "credit_reduction": credit_reduction,
+        "cash_refund": round(refund_amount - credit_reduction, 2),
+    }
+
+
+def returnable_sales(search: str = "", limit: int = 100) -> list[dict]:
+    """Recent sales that still have at least one unreturned unit, for the
+    Returns screen to search against."""
+    conn = get_connection()
+    try:
+        query = """
+            SELECT s.id, s.invoice_no, s.date, s.total_amount,
+                   COALESCE(c.name, 'Walk-in') AS customer_name
+            FROM sales s
+            LEFT JOIN customers c ON c.id = s.customer_id
+            WHERE EXISTS (
+                SELECT 1 FROM sale_items si WHERE si.sale_id = s.id AND si.quantity > si.returned_qty
+            )
+        """
+        params: list = []
+        if search:
+            query += " AND s.invoice_no LIKE ?"
+            params.append(f"%{search}%")
+        query += " ORDER BY s.date DESC LIMIT ?"
+        params.append(limit)
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()

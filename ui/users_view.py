@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from logic import auth
+from logic import audit, auth
 
 
 class UserEditDialog(QDialog):
@@ -160,11 +160,15 @@ class UsersView(QWidget):
     def _add_user(self):
         dialog = UserEditDialog(self)
         if dialog.exec() == QDialog.Accepted:
+            audit.log(self.current_user.id, self.current_user.username, "create_user",
+                       f"created user '{dialog.username_input.text().strip()}'")
             self.refresh()
 
     def _edit_user(self, user: auth.User):
         dialog = UserEditDialog(self, user=user)
         if dialog.exec() == QDialog.Accepted:
+            audit.log(self.current_user.id, self.current_user.username, "edit_user",
+                       f"edited user '{user.username}'")
             self.refresh()
 
     def _delete_user(self, user: auth.User):
@@ -179,6 +183,8 @@ class UsersView(QWidget):
             return
         try:
             auth.delete_user(user.id, current_user_id=self.current_user.id)
+            audit.log(self.current_user.id, self.current_user.username, "delete_user",
+                       f"deleted user '{user.username}'")
             self.refresh()
         except ValueError as e:
             QMessageBox.warning(self, "Cannot delete", str(e))

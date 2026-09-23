@@ -22,6 +22,7 @@ class Medicine:
     supplier_id: Optional[int]
     supplier_name: Optional[str]
     low_stock_threshold: int
+    is_controlled_substance: bool
     is_active: bool
 
     @property
@@ -63,6 +64,7 @@ def _row_to_medicine(row) -> Medicine:
         supplier_id=row["supplier_id"],
         supplier_name=row["supplier_name"] if "supplier_name" in row.keys() else None,
         low_stock_threshold=row["low_stock_threshold"],
+        is_controlled_substance=bool(row["is_controlled_substance"]),
         is_active=bool(row["is_active"]),
     )
 
@@ -178,6 +180,7 @@ def add_medicine(
     supplier_id: Optional[int],
     low_stock_threshold: int = 10,
     barcode: str = "",
+    is_controlled_substance: bool = False,
 ) -> Medicine:
     _validate(name, quantity, purchase_price, sale_price, expiry_date)
 
@@ -188,13 +191,13 @@ def add_medicine(
             """
             INSERT INTO medicines
                 (name, generic_name, category, barcode, batch_no, expiry_date, quantity,
-                 purchase_price, sale_price, supplier_id, low_stock_threshold)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 purchase_price, sale_price, supplier_id, low_stock_threshold, is_controlled_substance)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 name.strip(), generic_name.strip(), category.strip(), barcode.strip() or None,
                 batch_no.strip(), expiry_date or None, quantity, purchase_price, sale_price,
-                supplier_id, low_stock_threshold,
+                supplier_id, low_stock_threshold, int(is_controlled_substance),
             ),
         )
         conn.commit()
@@ -217,6 +220,7 @@ def update_medicine(
     supplier_id: Optional[int],
     low_stock_threshold: int,
     barcode: str = "",
+    is_controlled_substance: bool = False,
 ) -> Medicine:
     _validate(name, quantity, purchase_price, sale_price, expiry_date)
 
@@ -228,13 +232,13 @@ def update_medicine(
             UPDATE medicines
             SET name=?, generic_name=?, category=?, barcode=?, batch_no=?, expiry_date=?,
                 quantity=?, purchase_price=?, sale_price=?, supplier_id=?,
-                low_stock_threshold=?, updated_at=datetime('now', 'localtime')
+                low_stock_threshold=?, is_controlled_substance=?, updated_at=datetime('now', 'localtime')
             WHERE id=?
             """,
             (
                 name.strip(), generic_name.strip(), category.strip(), barcode.strip() or None,
                 batch_no.strip(), expiry_date or None, quantity, purchase_price, sale_price,
-                supplier_id, low_stock_threshold, medicine_id,
+                supplier_id, low_stock_threshold, int(is_controlled_substance), medicine_id,
             ),
         )
         conn.commit()
