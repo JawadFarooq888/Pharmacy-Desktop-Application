@@ -8,6 +8,7 @@ labels/
 build/
 dist/
 installer_output/
+deploy_package/
 
 # Python
 __pycache__/
