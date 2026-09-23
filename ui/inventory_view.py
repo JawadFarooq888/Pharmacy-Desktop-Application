@@ -247,8 +247,9 @@ class InventoryView(QWidget):
         self.alert_label.setWordWrap(True)
         layout.addWidget(self.alert_label)
 
-        columns = ["Name", "Generic", "Category", "Barcode", "Batch", "Expiry", "Qty", "Purchase", "Sale", "Supplier"]
+        columns = ["Name", "Generic", "Category", "Barcode", "Batch", "Expiry", "Qty", "Sale", "Supplier"]
         if self.current_user.is_admin:
+            columns.insert(7, "Purchase")  # cost price -- admin only, hidden from cashiers
             columns.append("Actions")
         self.table = QTableWidget(0, len(columns))
         self.table.setHorizontalHeaderLabels(columns)
@@ -315,9 +316,12 @@ class InventoryView(QWidget):
             display_name = f"🔒 {m.name}" if m.is_controlled_substance else m.name
             values = [
                 display_name, m.generic_name, m.category, m.barcode, m.batch_no,
-                m.expiry_date, str(m.quantity), f"{m.purchase_price:.2f}",
-                f"{m.sale_price:.2f}", m.supplier_name or "",
+                m.expiry_date, str(m.quantity),
             ]
+            if self.current_user.is_admin:
+                values.append(f"{m.purchase_price:.2f}")  # cost price -- admin only
+            values.append(f"{m.sale_price:.2f}")
+            values.append(m.supplier_name or "")
             row_color = None
             if m.is_expired or (m.days_to_expiry is not None and m.days_to_expiry <= 30):
                 row_color = EXPIRING_COLOR
