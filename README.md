@@ -168,7 +168,7 @@ listed in "Add or Remove Programs":
 
 ```bash
 winget install --id JRSoftware.InnoSetup -e   # one-time, if not installed
-"C:\Users\<you>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer.iss
+"C:\Users\<you>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" /DInstallerPassword="your-real-password" installer.iss
 ```
 
 This produces `installer_output\PharmacyManagementSystem_Setup.exe` — copy
@@ -180,6 +180,20 @@ shops' data.
 
 Rebuild both the `.exe` and the installer together after any source change —
 the installer script always bundles whatever is currently in `dist/`.
+
+### Install password (anti-piracy gate)
+
+Every `Setup.exe` requires a password before it will install anything --
+the wizard's very first page just refuses to continue without it. The same
+`Setup.exe` file can be handed out freely; what's actually gated is running
+it, so each shop has to get the password from you first.
+
+The password is **never stored in this repo** -- `installer.iss` only has a
+placeholder (`CHANGE_ME_AT_BUILD_TIME`) that's overridden via the
+`/DInstallerPassword="..."` flag shown above, which you supply locally each
+time you build. A build straight from a fresh checkout with no flag
+produces an installer nobody (including you) can actually get into, which
+is intentional -- it means the placeholder can never accidentally ship.
 
 ## Notes / known simplifications
 
