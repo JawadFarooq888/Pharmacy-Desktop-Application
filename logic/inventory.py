@@ -12,11 +12,13 @@ class Medicine:
     id: int
     name: str
     generic_name: str
+    manufacturer: str
     category: str
     barcode: str
     batch_no: str
     expiry_date: str  # ISO YYYY-MM-DD
-    quantity: int
+    quantity: int  # always in the smallest sold unit (e.g. tablets)
+    units_per_pack: int  # e.g. 10 tablets/strip -- a Billing quick-add convenience, not a second unit of account
     purchase_price: float
     sale_price: float
     supplier_id: Optional[int]
@@ -54,11 +56,13 @@ def _row_to_medicine(row) -> Medicine:
         id=row["id"],
         name=row["name"],
         generic_name=row["generic_name"] or "",
+        manufacturer=row["manufacturer"] or "",
         category=row["category"] or "",
         barcode=row["barcode"] or "",
         batch_no=row["batch_no"] or "",
         expiry_date=row["expiry_date"] or "",
         quantity=row["quantity"],
+        units_per_pack=row["units_per_pack"],
         purchase_price=row["purchase_price"],
         sale_price=row["sale_price"],
         supplier_id=row["supplier_id"],
@@ -78,14 +82,14 @@ _SELECT_BASE = """
 
 
 def list_medicines(search: str = "", category: str = "", supplier_id: Optional[int] = None) -> list[Medicine]:
-    """Search/filter medicines by name/generic name, category, and/or supplier."""
+    """Search/filter medicines by name/generic name/manufacturer, category, and/or supplier."""
     query = _SELECT_BASE
     params: list = []
 
     if search:
-        query += " AND (m.name LIKE ? OR m.generic_name LIKE ? OR m.barcode LIKE ?)"
+        query += " AND (m.name LIKE ? OR m.generic_name LIKE ? OR m.barcode LIKE ? OR m.manufacturer LIKE ?)"
         like = f"%{search}%"
-        params.extend([like, like, like])
+        params.extend([like, like, like, like])
     if category:
         query += " AND m.category = ?"
         params.append(category)
@@ -181,8 +185,11 @@ def add_medicine(
     low_stock_threshold: int = 10,
     barcode: str = "",
     is_controlled_substance: bool = False,
+    manufacturer: str = "",
+    units_per_pack: int = 1,
 ) -> Medicine:
     _validate(name, quantity, purchase_price, sale_price, expiry_date)
+    units_per_pack = max(1, units_per_pack)
 
     conn = get_connection()
     try:
@@ -190,14 +197,16 @@ def add_medicine(
         cur = conn.execute(
             """
             INSERT INTO medicines
-                (name, generic_name, category, barcode, batch_no, expiry_date, quantity,
-                 purchase_price, sale_price, supplier_id, low_stock_threshold, is_controlled_substance)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (name, generic_name, manufacturer, category, barcode, batch_no, expiry_date, quantity,
+                 units_per_pack, purchase_price, sale_price, supplier_id, low_stock_threshold,
+                 is_controlled_substance)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                name.strip(), generic_name.strip(), category.strip(), barcode.strip() or None,
-                batch_no.strip(), expiry_date or None, quantity, purchase_price, sale_price,
-                supplier_id, low_stock_threshold, int(is_controlled_substance),
+                name.strip(), generic_name.strip(), manufacturer.strip(), category.strip(),
+                barcode.strip() or None, batch_no.strip(), expiry_date or None, quantity,
+                units_per_pack, purchase_price, sale_price, supplier_id, low_stock_threshold,
+                int(is_controlled_substance),
             ),
         )
         conn.commit()
@@ -221,8 +230,11 @@ def update_medicine(
     low_stock_threshold: int,
     barcode: str = "",
     is_controlled_substance: bool = False,
+    manufacturer: str = "",
+    units_per_pack: int = 1,
 ) -> Medicine:
     _validate(name, quantity, purchase_price, sale_price, expiry_date)
+    units_per_pack = max(1, units_per_pack)
 
     conn = get_connection()
     try:
@@ -230,14 +242,15 @@ def update_medicine(
         conn.execute(
             """
             UPDATE medicines
-            SET name=?, generic_name=?, category=?, barcode=?, batch_no=?, expiry_date=?,
-                quantity=?, purchase_price=?, sale_price=?, supplier_id=?,
+            SET name=?, generic_name=?, manufacturer=?, category=?, barcode=?, batch_no=?, expiry_date=?,
+                quantity=?, units_per_pack=?, purchase_price=?, sale_price=?, supplier_id=?,
                 low_stock_threshold=?, is_controlled_substance=?, updated_at=datetime('now', 'localtime')
             WHERE id=?
             """,
             (
-                name.strip(), generic_name.strip(), category.strip(), barcode.strip() or None,
-                batch_no.strip(), expiry_date or None, quantity, purchase_price, sale_price,
+                name.strip(), generic_name.strip(), manufacturer.strip(), category.strip(),
+                barcode.strip() or None, batch_no.strip(), expiry_date or None, quantity,
+                units_per_pack, purchase_price, sale_price,
                 supplier_id, low_stock_threshold, int(is_controlled_substance), medicine_id,
             ),
         )

@@ -50,6 +50,7 @@ class BillingView(QWidget):
 
         self.results_list = QListWidget()
         self.results_list.itemDoubleClicked.connect(self._add_selected_to_cart)
+        self.results_list.currentRowChanged.connect(self._update_pack_button)
         left.addWidget(self.results_list)
 
         add_row = QHBoxLayout()
@@ -58,6 +59,12 @@ class BillingView(QWidget):
         self.qty_input.setValue(1)
         add_row.addWidget(QLabel("Qty:"))
         add_row.addWidget(self.qty_input)
+        self.pack_btn = QPushButton("📦  1 Pack")
+        self.pack_btn.setProperty("compact", True)
+        self.pack_btn.setToolTip("Set quantity to a whole strip/box of the selected medicine")
+        self.pack_btn.setEnabled(False)
+        self.pack_btn.clicked.connect(self._set_qty_to_pack_size)
+        add_row.addWidget(self.pack_btn)
         add_btn = QPushButton("🛒  Add to Cart")
         add_btn.setProperty("success", True)
         add_btn.setToolTip("F4")
@@ -320,11 +327,28 @@ class BillingView(QWidget):
         self._search_results = inventory.list_medicines(search=text) if text else []
         self.results_list.clear()
         for m in self._search_results:
-            label = f"{m.name}  |  Stock: {m.quantity}  |  Price: {m.sale_price:.2f}"
+            pack_note = f"  |  Pack: {m.units_per_pack}" if m.units_per_pack > 1 else ""
+            label = f"{m.name}  |  Stock: {m.quantity}  |  Price: {m.sale_price:.2f}{pack_note}"
             item = QListWidgetItem(label)
             if m.quantity <= 0:
                 item.setFlags(Qt.NoItemFlags)
             self.results_list.addItem(item)
+        self._update_pack_button()
+
+    def _update_pack_button(self):
+        row = self.results_list.currentRow()
+        if 0 <= row < len(self._search_results) and self._search_results[row].units_per_pack > 1:
+            pack_size = self._search_results[row].units_per_pack
+            self.pack_btn.setEnabled(True)
+            self.pack_btn.setText(f"📦  1 Pack ({pack_size})")
+        else:
+            self.pack_btn.setEnabled(False)
+            self.pack_btn.setText("📦  1 Pack")
+
+    def _set_qty_to_pack_size(self):
+        row = self.results_list.currentRow()
+        if 0 <= row < len(self._search_results):
+            self.qty_input.setValue(self._search_results[row].units_per_pack)
 
     def _add_selected_to_cart(self):
         row = self.results_list.currentRow()

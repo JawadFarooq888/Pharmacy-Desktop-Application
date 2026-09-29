@@ -65,6 +65,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "sales", "doctor_name", "TEXT")
     _add_column_if_missing(conn, "sales", "is_refunded", "INTEGER NOT NULL DEFAULT 0")
     _add_column_if_missing(conn, "sale_items", "returned_qty", "INTEGER NOT NULL DEFAULT 0")
+    _add_column_if_missing(conn, "medicines", "manufacturer", "TEXT")
+    _add_column_if_missing(conn, "medicines", "units_per_pack", "INTEGER NOT NULL DEFAULT 1")
     conn.commit()
 
     # Older sales predate amount_paid tracking (it defaults to 0). Backfill

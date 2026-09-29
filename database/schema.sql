@@ -31,11 +31,13 @@ CREATE TABLE IF NOT EXISTS medicines (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     name                TEXT NOT NULL,
     generic_name        TEXT,
+    manufacturer        TEXT,              -- company/brand owner, e.g. "GSK" (distinct from generic_name/supplier)
     category            TEXT,
     barcode             TEXT,
     batch_no            TEXT,
     expiry_date         TEXT,              -- ISO format YYYY-MM-DD
-    quantity            INTEGER NOT NULL DEFAULT 0,
+    quantity            INTEGER NOT NULL DEFAULT 0,  -- always in the smallest sold unit (e.g. tablets)
+    units_per_pack      INTEGER NOT NULL DEFAULT 1,  -- e.g. 10 tablets/strip -- informational + a Billing quick-add convenience, not a second unit of account
     purchase_price      REAL NOT NULL DEFAULT 0,
     sale_price          REAL NOT NULL DEFAULT 0,
     supplier_id         INTEGER,

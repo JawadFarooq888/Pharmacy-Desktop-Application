@@ -47,6 +47,8 @@ class MedicineEditDialog(QDialog):
 
         self.name_input = QLineEdit()
         self.generic_input = QLineEdit()
+        self.manufacturer_input = QLineEdit()
+        self.manufacturer_input.setPlaceholderText("e.g. GSK, Getz Pharma (optional)")
         self.category_input = QLineEdit()
         self.barcode_input = QLineEdit()
         self.barcode_input.setPlaceholderText("Optional")
@@ -59,6 +61,15 @@ class MedicineEditDialog(QDialog):
 
         self.quantity_input = QSpinBox()
         self.quantity_input.setRange(0, 1_000_000)
+
+        self.units_per_pack_input = QSpinBox()
+        self.units_per_pack_input.setRange(1, 10_000)
+        self.units_per_pack_input.setValue(1)
+        self.units_per_pack_input.setToolTip(
+            "How many of this medicine come in one strip/box/pack -- e.g. 10 for a "
+            "strip of 10 tablets. Quantity above is always counted in this smallest "
+            "unit; this just lets Billing quick-add a whole pack at once."
+        )
 
         self.purchase_price_input = QDoubleSpinBox()
         self.purchase_price_input.setRange(0, 1_000_000)
@@ -84,12 +95,14 @@ class MedicineEditDialog(QDialog):
         if self.medicine:
             self.name_input.setText(self.medicine.name)
             self.generic_input.setText(self.medicine.generic_name)
+            self.manufacturer_input.setText(self.medicine.manufacturer)
             self.category_input.setText(self.medicine.category)
             self.barcode_input.setText(self.medicine.barcode)
             self.batch_input.setText(self.medicine.batch_no)
             if self.medicine.expiry_date:
                 self.expiry_input.setDate(QDate.fromString(self.medicine.expiry_date, "yyyy-MM-dd"))
             self.quantity_input.setValue(self.medicine.quantity)
+            self.units_per_pack_input.setValue(self.medicine.units_per_pack)
             self.purchase_price_input.setValue(self.medicine.purchase_price)
             self.sale_price_input.setValue(self.medicine.sale_price)
             self.threshold_input.setValue(self.medicine.low_stock_threshold)
@@ -101,6 +114,7 @@ class MedicineEditDialog(QDialog):
 
         layout.addRow("Name *", self.name_input)
         layout.addRow("Generic name", self.generic_input)
+        layout.addRow("Manufacturer", self.manufacturer_input)
         layout.addRow("Category", self.category_input)
         layout.addRow("", self.controlled_substance_input)
 
@@ -119,6 +133,7 @@ class MedicineEditDialog(QDialog):
         layout.addRow("Batch No.", self.batch_input)
         layout.addRow("Expiry date", self.expiry_input)
         layout.addRow("Quantity *", self.quantity_input)
+        layout.addRow("Units per pack (tablets/strip)", self.units_per_pack_input)
         layout.addRow("Purchase price *", self.purchase_price_input)
         layout.addRow("Sale price *", self.sale_price_input)
         layout.addRow("Low-stock threshold", self.threshold_input)
@@ -144,10 +159,12 @@ class MedicineEditDialog(QDialog):
                 inventory.add_medicine(
                     name=self.name_input.text(),
                     generic_name=self.generic_input.text(),
+                    manufacturer=self.manufacturer_input.text(),
                     category=self.category_input.text(),
                     batch_no=self.batch_input.text(),
                     expiry_date=expiry_str,
                     quantity=self.quantity_input.value(),
+                    units_per_pack=self.units_per_pack_input.value(),
                     purchase_price=self.purchase_price_input.value(),
                     sale_price=self.sale_price_input.value(),
                     supplier_id=supplier_id,
@@ -160,10 +177,12 @@ class MedicineEditDialog(QDialog):
                     medicine_id=self.medicine.id,
                     name=self.name_input.text(),
                     generic_name=self.generic_input.text(),
+                    manufacturer=self.manufacturer_input.text(),
                     category=self.category_input.text(),
                     batch_no=self.batch_input.text(),
                     expiry_date=expiry_str,
                     quantity=self.quantity_input.value(),
+                    units_per_pack=self.units_per_pack_input.value(),
                     purchase_price=self.purchase_price_input.value(),
                     sale_price=self.sale_price_input.value(),
                     supplier_id=supplier_id,
@@ -247,9 +266,9 @@ class InventoryView(QWidget):
         self.alert_label.setWordWrap(True)
         layout.addWidget(self.alert_label)
 
-        columns = ["Name", "Generic", "Category", "Barcode", "Batch", "Expiry", "Qty", "Sale", "Supplier"]
+        columns = ["Name", "Generic", "Manufacturer", "Category", "Barcode", "Batch", "Expiry", "Qty", "Sale", "Supplier"]
         if self.current_user.is_admin:
-            columns.insert(7, "Purchase")  # cost price -- admin only, hidden from cashiers
+            columns.insert(8, "Purchase")  # cost price -- admin only, hidden from cashiers
             columns.append("Actions")
         self.table = QTableWidget(0, len(columns))
         self.table.setHorizontalHeaderLabels(columns)
@@ -314,9 +333,10 @@ class InventoryView(QWidget):
         self.table.setRowCount(len(medicines))
         for row, m in enumerate(medicines):
             display_name = f"🔒 {m.name}" if m.is_controlled_substance else m.name
+            qty_display = f"{m.quantity} (×{m.units_per_pack})" if m.units_per_pack > 1 else str(m.quantity)
             values = [
-                display_name, m.generic_name, m.category, m.barcode, m.batch_no,
-                m.expiry_date, str(m.quantity),
+                display_name, m.generic_name, m.manufacturer, m.category, m.barcode, m.batch_no,
+                m.expiry_date, qty_display,
             ]
             if self.current_user.is_admin:
                 values.append(f"{m.purchase_price:.2f}")  # cost price -- admin only
