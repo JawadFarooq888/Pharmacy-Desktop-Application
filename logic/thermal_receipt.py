@@ -4,8 +4,9 @@ Most USB thermal receipt printers sold in Pakistan install as an ordinary
 Windows printer (their own driver exposes a paper size matching the roll
 width), so a correctly-sized PDF prints on them just like on any other
 printer -- no raw ESC/POS byte protocol needed. ui.billing_view sends this
-PDF straight to the printer via Qt's print dialog (see print_pdf there)
-rather than requiring the user to open it manually first.
+PDF straight to the default printer via logic.printing.print_document()
+(Windows' own shell "print" verb) rather than requiring the user to open
+it manually first.
 """
 from pathlib import Path
 
@@ -40,7 +41,11 @@ def generate_thermal_receipt(
     """Build a narrow receipt PDF sized for a thermal printer and return its
     path. `width` is "58mm" or "80mm"."""
     RECEIPT_DIR.mkdir(parents=True, exist_ok=True)
-    file_path = RECEIPT_DIR / f"{receipt['invoice_no']}_thermal.pdf"
+    # Width is part of the filename (not just the invoice number) so
+    # regenerating the same invoice's receipt at a different roll width --
+    # e.g. after changing the shop's printer -- never silently overwrites an
+    # earlier one still sitting in this folder.
+    file_path = RECEIPT_DIR / f"{receipt['invoice_no']}_thermal_{width}.pdf"
 
     page_w = _WIDTHS_MM.get(width, 58) * mm
     page_h = 297 * mm  # tall placeholder; content determines actual print length
