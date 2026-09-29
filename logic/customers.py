@@ -99,6 +99,19 @@ def delete_customer(customer_id: int) -> None:
                 f"Cannot delete: this customer still owes {row['credit_balance']:.2f} in udhaar. "
                 "Record their payment first."
             )
+        # customer_payments.customer_id is ON DELETE CASCADE, so deleting a
+        # customer who has ever made an udhaar payment -- even one who has
+        # since paid off their whole balance -- would otherwise silently
+        # erase that payment history along with them, despite the delete
+        # confirmation only warning about sales being unlinked.
+        has_payments = conn.execute(
+            "SELECT COUNT(*) AS c FROM customer_payments WHERE customer_id=?", (customer_id,)
+        ).fetchone()["c"]
+        if has_payments:
+            raise ValueError(
+                "Cannot delete: this customer has recorded udhaar payments, and deleting "
+                "them would permanently erase that payment history."
+            )
         conn.execute("UPDATE sales SET customer_id = NULL WHERE customer_id = ?", (customer_id,))
         conn.execute("DELETE FROM customers WHERE id=?", (customer_id,))
         conn.commit()

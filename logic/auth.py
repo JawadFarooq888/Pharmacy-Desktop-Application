@@ -130,6 +130,27 @@ def delete_user(user_id: int, current_user_id: int) -> None:
         target = conn.execute("SELECT role FROM users WHERE id=?", (user_id,)).fetchone()
         if target and target["role"] == "admin" and remaining_admins == 0:
             raise ValueError("Cannot delete the last remaining admin account.")
+
+        # sales.cashier_id, customer_payments.recorded_by and
+        # sale_returns.processed_by all reference users(id) with no ON
+        # DELETE clause, so deleting a user who has ever processed a sale,
+        # payment or return would otherwise fail with a raw, unhandled
+        # sqlite3.IntegrityError (FOREIGN KEY constraint failed) instead of
+        # a message the admin can act on.
+        in_use = conn.execute(
+            "SELECT "
+            "(SELECT COUNT(*) FROM sales WHERE cashier_id=?) + "
+            "(SELECT COUNT(*) FROM customer_payments WHERE recorded_by=?) + "
+            "(SELECT COUNT(*) FROM sale_returns WHERE processed_by=?) AS c",
+            (user_id, user_id, user_id),
+        ).fetchone()["c"]
+        if in_use:
+            raise ValueError(
+                "Cannot delete: this user has recorded sales, payments, or returns. "
+                "Deactivate the account instead (uncheck 'Active' when editing it) "
+                "to keep those records intact."
+            )
+
         conn.execute("DELETE FROM users WHERE id=?", (user_id,))
         conn.commit()
     finally:

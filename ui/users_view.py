@@ -188,3 +188,5 @@ class UsersView(QWidget):
             self.refresh()
         except ValueError as e:
             QMessageBox.warning(self, "Cannot delete", str(e))
+        except Exception as e:
+            QMessageBox.critical(self, "Cannot delete", f"An unexpected error occurred:\n{e}")
