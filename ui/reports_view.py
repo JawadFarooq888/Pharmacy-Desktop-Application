@@ -343,6 +343,26 @@ class CustomerCreditTab(_ReportTab):
         self._set_data("Udhaar Credit Summary", headers, rows, summary)
 
 
+class SupplierPayableTab(_ReportTab):
+    """The mirror of the Udhaar Summary tab: what the shop owes suppliers."""
+
+    def __init__(self):
+        super().__init__()
+        refresh_btn = QPushButton("🔄  Refresh")
+        refresh_btn.clicked.connect(self.refresh)
+        self.controls_layout.addWidget(refresh_btn)
+        self.controls_layout.addStretch()
+        self.refresh()
+
+    def refresh(self):
+        data = reports.supplier_payable_report()
+        headers = ["Supplier", "Contact", "Outstanding Payable"]
+        rows = [[d["name"], d["contact"] or "", f"{d['payable_balance']:.2f}"] for d in data]
+        total_owed = sum(d["payable_balance"] for d in data)
+        summary = f"Supplier Payables   |   Shop owes {len(data)} supplier(s) a total of {total_owed:.2f}"
+        self._set_data("Supplier Payables Summary", headers, rows, summary)
+
+
 class ReportsView(QWidget):
     def __init__(self):
         super().__init__()
@@ -359,6 +379,7 @@ class ReportsView(QWidget):
         tabs.addTab(DeadStockTab(), "Dead Stock")
         tabs.addTab(BestSellersTab(), "Best Sellers")
         tabs.addTab(CustomerCreditTab(), "Udhaar Summary")
+        tabs.addTab(SupplierPayableTab(), "Supplier Payables")
         tabs.addTab(ControlledSubstancesTab(), "Controlled Substances")
         layout.addWidget(tabs)
 

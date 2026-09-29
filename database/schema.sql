@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS suppliers (
     name            TEXT NOT NULL,
     contact         TEXT,
     address         TEXT,
+    payable_balance REAL NOT NULL DEFAULT 0,   -- amount the shop currently owes this supplier
     created_at      TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
@@ -91,6 +92,23 @@ CREATE TABLE IF NOT EXISTS customer_payments (
     FOREIGN KEY (recorded_by) REFERENCES users(id)
 );
 
+-- Payments the shop makes to a supplier against what it owes them (accounts
+-- payable -- the mirror image of customer udhaar). Deliberately NOT
+-- ON DELETE CASCADE: suppliers.delete_supplier() blocks deleting a supplier
+-- that has any payment history instead, so that history is never silently
+-- destroyed (see the same fix applied to customer deletion).
+CREATE TABLE IF NOT EXISTS supplier_payments (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier_id     INTEGER NOT NULL,
+    amount          REAL NOT NULL,
+    payment_method  TEXT NOT NULL DEFAULT 'cash',
+    note            TEXT,
+    recorded_by     INTEGER,
+    date            TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    FOREIGN KEY (recorded_by) REFERENCES users(id)
+);
+
 -- Returns/refunds against a specific sale line item (restocks inventory).
 CREATE TABLE IF NOT EXISTS sale_returns (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -140,5 +158,6 @@ CREATE INDEX IF NOT EXISTS idx_medicines_expiry ON medicines(expiry_date);
 CREATE INDEX IF NOT EXISTS idx_sales_date ON sales(date);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_customer_payments_customer ON customer_payments(customer_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_payments_supplier ON supplier_payments(supplier_id);
 CREATE INDEX IF NOT EXISTS idx_sale_returns_sale ON sale_returns(sale_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(timestamp);

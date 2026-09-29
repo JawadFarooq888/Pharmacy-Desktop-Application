@@ -72,7 +72,7 @@ class MainWindow(QMainWindow):
         pages.append(("Inventory", InventoryView(self.user)))
         pages.append(("Customers", CustomersView(self.user)))
         if self.user.is_admin:
-            pages.append(("Suppliers", SuppliersView()))
+            pages.append(("Suppliers", SuppliersView(self.user)))
         pages.append(("Reports", ReportsView()))
         if self.user.is_admin:
             pages.append(("Backup / Restore", BackupView(self.user)))

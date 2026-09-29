@@ -226,6 +226,20 @@ def customer_credit_report() -> list[dict]:
         conn.close()
 
 
+def supplier_payable_report() -> list[dict]:
+    """Every supplier the shop currently owes money to, most-owed first --
+    the mirror of customer_credit_report()."""
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, name, contact, payable_balance FROM suppliers "
+            "WHERE payable_balance > 0.005 ORDER BY payable_balance DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def expiry_stock_report(within_days: int = 90) -> list[dict]:
     cutoff = (date.today() + timedelta(days=within_days)).isoformat()
     conn = get_connection()

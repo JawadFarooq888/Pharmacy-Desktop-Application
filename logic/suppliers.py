@@ -1,4 +1,6 @@
-"""Supplier business logic (basic CRUD + purchase-order stock intake)."""
+"""Supplier business logic: basic CRUD, purchase-order stock intake, and
+accounts payable (the mirror image of customer udhaar -- what the shop
+currently owes each supplier, and payments made against it)."""
 from dataclasses import dataclass
 from typing import Optional
 
@@ -11,16 +13,35 @@ class Supplier:
     name: str
     contact: str
     address: str
+    payable_balance: float  # amount the shop currently owes this supplier
+
+    @property
+    def has_payable(self) -> bool:
+        return self.payable_balance > 0.005  # guard against float dust
 
 
 def _row_to_supplier(row) -> Supplier:
-    return Supplier(id=row["id"], name=row["name"], contact=row["contact"] or "", address=row["address"] or "")
+    return Supplier(
+        id=row["id"], name=row["name"], contact=row["contact"] or "", address=row["address"] or "",
+        payable_balance=row["payable_balance"],
+    )
 
 
 def list_suppliers() -> list[Supplier]:
     conn = get_connection()
     try:
         rows = conn.execute("SELECT * FROM suppliers ORDER BY name").fetchall()
+        return [_row_to_supplier(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def list_suppliers_with_payable() -> list[Supplier]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM suppliers WHERE payable_balance > 0.005 ORDER BY payable_balance DESC"
+        ).fetchall()
         return [_row_to_supplier(r) for r in rows]
     finally:
         conn.close()
@@ -76,28 +97,75 @@ def delete_supplier(supplier_id: int) -> None:
             raise ValueError(
                 f"Cannot delete: {in_use} medicine(s) still reference this supplier."
             )
+        row = conn.execute("SELECT payable_balance FROM suppliers WHERE id=?", (supplier_id,)).fetchone()
+        if row and row["payable_balance"] > 0.005:
+            raise ValueError(
+                f"Cannot delete: the shop still owes {row['payable_balance']:.2f} to this supplier. "
+                "Record the payment first."
+            )
+        # supplier_payments.supplier_id has no ON DELETE CASCADE on purpose
+        # (see the customer-payment-history bug fix) -- block deletion here
+        # instead of letting that history be destroyed.
+        has_payments = conn.execute(
+            "SELECT COUNT(*) AS c FROM supplier_payments WHERE supplier_id=?", (supplier_id,)
+        ).fetchone()["c"]
+        if has_payments:
+            raise ValueError(
+                "Cannot delete: this supplier has recorded payments, and deleting "
+                "them would permanently erase that payment history."
+            )
         conn.execute("DELETE FROM suppliers WHERE id=?", (supplier_id,))
         conn.commit()
     finally:
         conn.close()
 
 
-def record_purchase_order(medicine_id: int, quantity: int, new_batch_no: str, new_expiry_date: str, new_purchase_price: Optional[float] = None) -> None:
-    """Receive new stock from a supplier: bump quantity and update batch/expiry.
+def record_purchase_order(
+    medicine_id: int,
+    quantity: int,
+    new_batch_no: str,
+    new_expiry_date: str,
+    new_purchase_price: Optional[float] = None,
+    amount_paid: Optional[float] = None,
+) -> dict:
+    """Receive new stock from a supplier: bump quantity and update batch/expiry,
+    and (if the medicine has a supplier assigned) track what's still owed to
+    them as accounts payable -- the mirror of customer udhaar.
 
     Simplification note: this project tracks one batch/expiry per medicine row
     (matching the fixed `medicines` schema in the spec) rather than per-batch
     lots, so receiving stock overwrites batch_no/expiry_date with the newest.
+
+    `amount_paid=None` means "paid in full" (the whole cost of this order),
+    matching sales.checkout()'s convention.
     """
     if quantity <= 0:
         raise ValueError("Received quantity must be positive.")
-    from logic import inventory
 
     conn = get_connection()
     try:
-        row = conn.execute("SELECT quantity FROM medicines WHERE id=?", (medicine_id,)).fetchone()
+        row = conn.execute(
+            "SELECT quantity, purchase_price, supplier_id FROM medicines WHERE id=?", (medicine_id,)
+        ).fetchone()
         if row is None:
             raise ValueError("Medicine not found.")
+
+        unit_cost = new_purchase_price if new_purchase_price is not None else row["purchase_price"]
+        total_cost = round(unit_cost * quantity, 2)
+        if amount_paid is None:
+            amount_paid = total_cost
+        if amount_paid < 0:
+            raise ValueError("Amount paid cannot be negative.")
+        if amount_paid > total_cost + 0.005:
+            raise ValueError("Amount paid cannot be more than the order's total cost.")
+
+        payable_added = round(total_cost - amount_paid, 2)
+        if payable_added > 0.005 and row["supplier_id"] is None:
+            raise ValueError(
+                "This medicine has no supplier assigned, so a partial/credit payment can't be "
+                "tracked as payable. Set a supplier on the medicine first, or pay in full."
+            )
+
         new_qty = row["quantity"] + quantity
         if new_purchase_price is not None:
             conn.execute(
@@ -111,6 +179,55 @@ def record_purchase_order(medicine_id: int, quantity: int, new_batch_no: str, ne
                 "updated_at=datetime('now','localtime') WHERE id=?",
                 (new_qty, new_batch_no.strip(), new_expiry_date, medicine_id),
             )
+
+        if payable_added > 0.005:
+            conn.execute(
+                "UPDATE suppliers SET payable_balance = payable_balance + ? WHERE id=?",
+                (payable_added, row["supplier_id"]),
+            )
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"total_cost": total_cost, "amount_paid": amount_paid, "payable_added": max(payable_added, 0.0)}
+
+
+def payment_history(supplier_id: int) -> list[dict]:
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, amount, payment_method, note, date FROM supplier_payments "
+            "WHERE supplier_id=? ORDER BY date DESC",
+            (supplier_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def record_payment(supplier_id: int, amount: float, payment_method: str, recorded_by: int, note: str = "") -> None:
+    """Record the shop paying down some or all of what it owes a supplier."""
+    if amount <= 0:
+        raise ValueError("Payment amount must be positive.")
+    conn = get_connection()
+    try:
+        row = conn.execute("SELECT payable_balance FROM suppliers WHERE id=?", (supplier_id,)).fetchone()
+        if row is None:
+            raise ValueError("Supplier not found.")
+        if amount > row["payable_balance"] + 0.005:
+            raise ValueError(
+                f"Payment ({amount:.2f}) is more than the outstanding payable ({row['payable_balance']:.2f})."
+            )
+        conn.execute(
+            "INSERT INTO supplier_payments (supplier_id, amount, payment_method, note, recorded_by) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (supplier_id, amount, payment_method, note.strip(), recorded_by),
+        )
+        conn.execute(
+            "UPDATE suppliers SET payable_balance = payable_balance - ? WHERE id=?",
+            (amount, supplier_id),
+        )
         conn.commit()
     finally:
         conn.close()
