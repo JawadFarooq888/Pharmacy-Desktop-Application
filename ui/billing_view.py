@@ -1,5 +1,6 @@
 """Billing / POS screen: search medicine -> add to cart -> checkout -> print invoice."""
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -42,7 +43,7 @@ class BillingView(QWidget):
         left.addWidget(title)
 
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("🔍📷  Scan barcode or type medicine name...")
+        self.search_input.setPlaceholderText("🔍📷  Scan barcode or type medicine name... (F2)")
         self.search_input.textChanged.connect(self.refresh_search)
         self.search_input.returnPressed.connect(self._handle_scan_or_enter)
         left.addWidget(self.search_input)
@@ -59,6 +60,7 @@ class BillingView(QWidget):
         add_row.addWidget(self.qty_input)
         add_btn = QPushButton("🛒  Add to Cart")
         add_btn.setProperty("success", True)
+        add_btn.setToolTip("F4")
         add_btn.clicked.connect(self._add_selected_to_cart)
         add_row.addWidget(add_btn)
         left.addLayout(add_row)
@@ -147,18 +149,45 @@ class BillingView(QWidget):
         checkout_row = QHBoxLayout()
         clear_btn = QPushButton("🗑️  Clear Cart")
         clear_btn.setProperty("danger", True)
+        clear_btn.setToolTip("Ctrl+N")
         clear_btn.clicked.connect(self._clear_cart)
         checkout_row.addWidget(clear_btn)
         checkout_btn = QPushButton("🧾  Checkout && Print Invoice")
         checkout_btn.setProperty("success", True)
+        checkout_btn.setToolTip("Ctrl+S")
         checkout_btn.clicked.connect(self._checkout)
         checkout_row.addWidget(checkout_btn)
         right.addLayout(checkout_row)
+
+        hotkeys_hint = QLabel(
+            "⌨️  F2 Search   |   F4 Add to Cart   |   Ctrl+D Remove Selected   |   "
+            "Ctrl+S Checkout   |   Ctrl+N Clear Cart"
+        )
+        hotkeys_hint.setProperty("subheading", True)
+        right.addWidget(hotkeys_hint)
 
         root.addLayout(right, 3)
         self.setLayout(root)
 
         self._reload_customers()
+        self._setup_shortcuts()
+
+    def _setup_shortcuts(self):
+        QShortcut(QKeySequence("F2"), self, activated=self._focus_search)
+        QShortcut(QKeySequence("F4"), self, activated=self._add_selected_to_cart)
+        QShortcut(QKeySequence("Ctrl+D"), self, activated=self._remove_selected_cart_item)
+        QShortcut(QKeySequence("Ctrl+S"), self, activated=self._checkout)
+        QShortcut(QKeySequence("Ctrl+N"), self, activated=self._clear_cart)
+
+    def _focus_search(self):
+        self.search_input.setFocus()
+        self.search_input.selectAll()
+
+    def _remove_selected_cart_item(self):
+        row = self.cart_table.currentRow()
+        if row < 0 or row >= len(self.cart.items):
+            return
+        self._remove_from_cart(self.cart.items[row].medicine_id)
 
     def refresh(self):
         """Called whenever this screen becomes visible (e.g. switching to it
