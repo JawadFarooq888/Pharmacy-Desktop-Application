@@ -384,12 +384,18 @@ class ReportsView(QWidget):
         layout.addWidget(tabs)
 
         self.tabs = tabs
+        # Switching sub-tabs WITHIN Reports (without ever leaving the Reports
+        # page, so MainWindow's own switch-page refresh never fires) must
+        # also show live data -- otherwise a tab you land on could still be
+        # showing whatever it had at construction time.
+        tabs.currentChanged.connect(lambda _index: self.refresh())
         self.setLayout(layout)
 
     def refresh(self):
-        """Called whenever this screen becomes visible; refreshes just the
-        currently-open sub-tab (each tab already has its own manual Refresh
-        button for expensive re-queries the user doesn't want to repeat)."""
+        """Called whenever this screen (or one of its sub-tabs) becomes
+        visible; refreshes just the currently-open sub-tab (each tab already
+        has its own manual Refresh button for expensive re-queries the user
+        doesn't want to repeat)."""
         current = self.tabs.currentWidget()
         if current is not None:
             current.refresh()

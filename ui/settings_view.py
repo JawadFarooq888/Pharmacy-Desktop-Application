@@ -201,10 +201,13 @@ class SettingsView(QWidget):
         layout.addWidget(tabs)
 
         self.tabs = tabs
+        # Switching sub-tabs WITHIN Settings (e.g. General -> User Management)
+        # without leaving the Settings page must also show live data.
+        tabs.currentChanged.connect(lambda _index: self.refresh())
         self.setLayout(layout)
 
     def refresh(self):
-        """Called whenever this screen becomes visible; refreshes just the
+        """Called whenever this screen (or one of its sub-tabs) becomes visible; refreshes just the
         currently-open sub-tab."""
         current = self.tabs.currentWidget()
         if current is not None and hasattr(current, "refresh"):
