@@ -93,6 +93,11 @@ class BillingView(QWidget):
         refresh_cust_btn = QPushButton("🔄  Refresh")
         refresh_cust_btn.clicked.connect(self._reload_customers)
         customer_row.addWidget(refresh_cust_btn)
+        self.repeat_order_btn = QPushButton("🔁  Repeat Last Order")
+        self.repeat_order_btn.setToolTip("Reload this customer's most recent sale into the cart")
+        self.repeat_order_btn.setEnabled(False)
+        self.repeat_order_btn.clicked.connect(self._repeat_last_order)
+        customer_row.addWidget(self.repeat_order_btn)
         right.addLayout(customer_row)
 
         self.credit_label = QLabel("")
@@ -209,6 +214,59 @@ class BillingView(QWidget):
         self.customer_input.blockSignals(False)
         self._on_customer_changed()
 
+    def _repeat_last_order(self):
+        """Reload a repeat customer's most recent sale into the current cart
+        -- for chronic-patient customers who buy the same handful of
+        medicines every month, so the cashier doesn't have to search and add
+        each one by hand every single time."""
+        customer_id = self.customer_input.currentData()
+        if customer_id is None:
+            return
+
+        history = customers.sales_history(customer_id)
+        if not history:
+            QMessageBox.information(
+                self, "No previous orders", "This customer has no previous sales to repeat."
+            )
+            return
+
+        last_sale = history[0]
+        detail = sales.get_sale_with_items(last_sale["id"])
+        items = detail["items"] if detail else []
+
+        added, limited, unavailable = [], [], []
+        for item in items:
+            medicine = inventory.get_medicine(item["medicine_id"])
+            if medicine is None:
+                unavailable.append(item["medicine_name"])
+                continue
+            already_in_cart = next(
+                (i.quantity for i in self.cart.items if i.medicine_id == medicine.id), 0
+            )
+            room = medicine.quantity - already_in_cart
+            if room <= 0:
+                unavailable.append(medicine.name)
+                continue
+            qty_to_add = min(item["quantity"], room)
+            self.cart.add(medicine, qty_to_add)
+            if qty_to_add < item["quantity"]:
+                limited.append(f"{medicine.name} (only {qty_to_add} of {item['quantity']} in stock)")
+            else:
+                added.append(medicine.name)
+
+        self._render_cart()
+
+        parts = []
+        if added:
+            parts.append(f"Added {len(added)} item(s) from the order on {last_sale['date'][:10]}.")
+        if limited:
+            parts.append("Added with reduced quantity (limited stock):\n- " + "\n- ".join(limited))
+        if unavailable:
+            parts.append("Could not add (out of stock or discontinued):\n- " + "\n- ".join(unavailable))
+        if not parts:
+            parts.append("Nothing could be added from the last order.")
+        QMessageBox.information(self, "Repeat Last Order", "\n\n".join(parts))
+
     def _update_credit_label(self):
         customer_id = self.customer_input.currentData()
         if customer_id is None:
@@ -221,6 +279,7 @@ class BillingView(QWidget):
             self.credit_label.setText("")
 
     def _on_customer_changed(self):
+        self.repeat_order_btn.setEnabled(self.customer_input.currentData() is not None)
         self._update_credit_label()
         # Re-apply the payment method's default now that udhaar may have
         # just become usable again (a walk-in always forces "paid in full"
